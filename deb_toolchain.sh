@@ -1,31 +1,57 @@
 #!/bin/bash
 
 # Set colors
-# Regular
-black="$(tput setaf 0 2>/dev/null || echo '\e[0;30m')"  # Black
-red="$(tput setaf 1 2>/dev/null || echo '\e[0;31m')"  # Red
-green="$(tput setaf 2 2>/dev/null || echo '\e[0;32m')"  # Green
-yellow="$(tput setaf 3 2>/dev/null || echo '\e[0;33m')"  # Yellow
-blue="$(tput setaf 4 2>/dev/null || echo '\e[0;34m')"  # Blue
-purple="$(tput setaf 5 2>/dev/null || echo '\e[0;35m')"  # Purple
-cyan="$(tput setaf 6 2>/dev/null || echo '\e[0;36m')"  # Cyan
-white="$(tput setaf 7 2>/dev/null || echo '\e[0;37m')"  # White
+if [ -f /.dockerenv ]; then
+    # Regular
+    black=""  # Black
+    red=""  # Red
+    green=""  # Green
+    yellow=""  # Yellow
+    blue=""  # Blue
+    purple=""  # Purple
+    cyan=""  # Cyan
+    white=""  # White
+    # Bold
+    BLACK=""  # Black
+    RED=""  # Red
+    GREEN=""  # Green
+    YELLOW=""  # Yellow
+    BLUE=""  # Blue
+    PURPLE=""  # Purple
+    CYAN=""  # Cyan
+    WHITE="" # White
+    # Reset
+    NC="" # Text Reset
+else
+    # Regular
+    black="$(tput setaf 0 2>/dev/null || echo '\e[0;30m')"  # Black
+    red="$(tput setaf 1 2>/dev/null || echo '\e[0;31m')"  # Red
+    green="$(tput setaf 2 2>/dev/null || echo '\e[0;32m')"  # Green
+    yellow="$(tput setaf 3 2>/dev/null || echo '\e[0;33m')"  # Yellow
+    blue="$(tput setaf 4 2>/dev/null || echo '\e[0;34m')"  # Blue
+    purple="$(tput setaf 5 2>/dev/null || echo '\e[0;35m')"  # Purple
+    cyan="$(tput setaf 6 2>/dev/null || echo '\e[0;36m')"  # Cyan
+    white="$(tput setaf 7 2>/dev/null || echo '\e[0;37m')"  # White
+    # Bold
+    BLACK="$(tput setaf 0 2>/dev/null)$(tput bold 2>/dev/null || echo '\e[1;30m')"  # Black
+    RED="$(tput setaf 1 2>/dev/null)$(tput bold 2>/dev/null || echo '\e[1;31m')"  # Red
+    GREEN="$(tput setaf 2 2>/dev/null)$(tput bold 2>/dev/null || echo '\e[1;32m')"  # Green
+    YELLOW="$(tput setaf 3 2>/dev/null)$(tput bold 2>/dev/null || echo '\e[1;33m')"  # Yellow
+    BLUE="$(tput setaf 4 2>/dev/null)$(tput bold 2>/dev/null || echo '\e[1;34m')"  # Blue
+    PURPLE="$(tput setaf 5 2>/dev/null)$(tput bold 2>/dev/null || echo '\e[1;35m')"  # Purple
+    CYAN="$(tput setaf 6 2>/dev/null)$(tput bold 2>/dev/null || echo '\e[1;36m')"  # Cyan
+    WHITE="$(tput setaf 7 2>/dev/null)$(tput bold 2>/dev/null || echo '\e[1;37m')" # White
+    # Reset
+    NC="$(tput sgr 0 2>/dev/null || echo '\e[0m')" # Text Reset
+fi
 
-# Bold
-BLACK="$(tput setaf 0 2>/dev/null)$(tput bold 2>/dev/null || echo '\e[1;30m')"  # Black
-RED="$(tput setaf 1 2>/dev/null)$(tput bold 2>/dev/null || echo '\e[1;31m')"  # Red
-GREEN="$(tput setaf 2 2>/dev/null)$(tput bold 2>/dev/null || echo '\e[1;32m')"  # Green
-YELLOW="$(tput setaf 3 2>/dev/null)$(tput bold 2>/dev/null || echo '\e[1;33m')"  # Yellow
-BLUE="$(tput setaf 4 2>/dev/null)$(tput bold 2>/dev/null || echo '\e[1;34m')"  # Blue
-PURPLE="$(tput setaf 5 2>/dev/null)$(tput bold 2>/dev/null || echo '\e[1;35m')"  # Purple
-CYAN="$(tput setaf 6 2>/dev/null)$(tput bold 2>/dev/null || echo '\e[1;36m')"  # Cyan
-WHITE="$(tput setaf 7 2>/dev/null)$(tput bold 2>/dev/null || echo '\e[1;37m')" # White
-
-# Reset
-NC="$(tput sgr 0 2>/dev/null || echo '\e[0m')" # Text Reset
-
-LOG_FILE=$(pwd)/$1-output.log
-ERROR_FILE=$(pwd)/$1-error.log
+if [ -f /.dockerenv ]; then
+    LOG_FILE=""
+    ERROR_FILE=""
+else
+    LOG_FILE=$(pwd)/$1-output.log
+    ERROR_FILE=$(pwd)/$1-error.log
+fi
 RESULT_FILE=$(pwd)/$1-result.log
 # Clear logs
 rm -rf $LOG_FILE $ERROR_FILE
@@ -34,18 +60,26 @@ rm -rf $LOG_FILE $ERROR_FILE
 trap 'previous_command=$this_command; this_command=$BASH_COMMAND' DEBUG
 
 redirect_output() {
-    # Save stdout and stderr
-    exec 3>&1 4>&2
-    # Set output log files
-    exec 2>>$ERROR_FILE
-    exec 1>>$LOG_FILE
+    if [ -f /.dockerenv ]; then
+        return
+    else
+        # Save stdout and stderr
+        exec 3>&1 4>&2
+        # Set output log files
+        exec 2>>$ERROR_FILE
+        exec 1>>$LOG_FILE
+    fi
 }
 
 restore_output() {
-    # Restore original stdout/stderr
-    exec 1>&3 2>&4
-    # Close the unused descriptors
-    exec 3>&- 4>&-
+    if [ -f /.dockerenv ]; then
+        return
+    else
+        # Restore original stdout/stderr
+        exec 1>&3 2>&4
+        # Close the unused descriptors
+        exec 3>&- 4>&-
+    fi
 }
 
 download() {
@@ -92,6 +126,7 @@ err_report() {
     exit 1
 }
 
+
 USAGE="Usage: $0 [mipsel|mips|armel|armv4l|armbe|i686|powerpc|tilegx]"
 if [[ $1 == mipsel ]]; then
     export TARGET=mipsel-linux-gnu
@@ -134,8 +169,10 @@ else
     exit 1
 fi
 
+
 trap 'err_report $LINENO' ERR
 trap 'restore_output' EXIT
+
 
 TOOLCHAIN_DIR=/usr
 export TARGET_CC="$TARGET-gcc $CFLAGS_FOR_TARGET"
@@ -164,6 +201,7 @@ export DEB_TARGET=$1 #$(echo $TARGET|tr '-' ' '|awk '{print $1}')
 export DEB_PACK=$(pwd)/${DEB_TARGET}_toolchain_v${DEBv}_${DEB_ARCH}
 export TMP_BUILD_DIR=$(pwd)/$DEB_TARGET-cross
 
+
 # Check kernel generation
 if [[ $KERNELv > 3 ]] && [[ $KERNELv < 4 ]]; then export KERNEL_GEN=v3.x; fi
 if [[ $KERNELv > 4 ]] && [[ $KERNELv < 5 ]]; then export KERNEL_GEN=v4.x; fi
@@ -172,11 +210,13 @@ if [[ $KERNELv > 2.5 ]] && [[ $KERNELv < 2.6 ]]; then export KERNEL_GEN=v2.5; fi
 if [[ $KERNELv > 2.4 ]] && [[ $KERNELv < 2.5 ]]; then export KERNEL_GEN=v2.4; fi
 if [[ $KERNELv > 2.3 ]] && [[ $KERNELv < 2.4 ]]; then export KERNEL_GEN=v2.3; fi
 
+
 redirect_output
 print_info "Update apt-get"
 apt-get update && apt-get -y upgrade
-apt-get install -y g++ make gawk autoconf libtool bison
+apt-get install -y g++ make gawk autoconf libtool bison wget texinfo
 apt-get -y autoremove
+
 
 if [[ ! -d $TMP_BUILD_DIR ]]; then
     mkdir $TMP_BUILD_DIR
@@ -191,20 +231,22 @@ if [[ -d $DEB_PACK ]]; then
 fi
 mkdir -p $DEB_PACK
 
+
 print_info "Download sources"
 SOURCE_LINKS=(
     https://ftp.gnu.org/gnu/binutils/binutils-$BINUTILSv.tar.gz
     https://ftp.gnu.org/gnu/gcc/gcc-$GCCv/gcc-$GCCv.tar.gz
-    https://www.kernel.org/pub/linux/kernel/$KERNEL_GEN/linux-$KERNELv.tar.xz
-    https://ftp.gnu.org/gnu/glibc/glibc-$GLIBCv.tar.xz
-    https://ftp.gnu.org/gnu/glibc/glibc-ports-$GLIBCv.tar.xz
-    https://ftp.gnu.org/gnu/mpfr/mpfr-$MPFRv.tar.xz
-    https://ftp.gnu.org/gnu/gmp/gmp-$GMPv.tar.xz
+    https://www.kernel.org/pub/linux/kernel/$KERNEL_GEN/linux-$KERNELv.tar.gz
+    https://ftp.gnu.org/gnu/glibc/glibc-$GLIBCv.tar.bz2
+    https://ftp.gnu.org/gnu/glibc/glibc-ports-$GLIBCv.tar.bz2
+    https://ftp.gnu.org/gnu/mpfr/mpfr-$MPFRv.tar.bz2
+    https://ftp.gnu.org/gnu/gmp/gmp-$GMPv.tar.bz2
     https://ftp.gnu.org/gnu/mpc/mpc-$MPCv.tar.gz
     ftp://gcc.gnu.org/pub/gcc/infrastructure/isl-$ISLv.tar.bz2
     ftp://gcc.gnu.org/pub/gcc/infrastructure/cloog-$CLOOGv.tar.gz
 )
 for i in ${SOURCE_LINKS[@]}; do download $i; done
+
 
 print_info "Create links"
 cd binutils-$BINUTILSv
@@ -344,8 +386,20 @@ if ! grep -Fxq "test" $RESULT_FILE; then
     cd ..
     echo "test" >> $RESULT_FILE
 fi
+
+
+for item in $(file $USR/bin/$TARGET*|grep ELF|tr : ' '|awk '{print $1}'); do
+    strip_debug "$item"
+done
+
+
 print_success "Toolchain for $TARGET is ready"
 print_success "Use $TARGET_CC for compile your projects"
+
+
+if [ -z ${MAKE_DEB} ]; then
+    exit 0
+fi
 
 
 if ! grep -Fxq "deb" $RESULT_FILE; then
@@ -363,8 +417,7 @@ if ! grep -Fxq "deb" $RESULT_FILE; then
     echo "Package: $NAME" >> $DEB_PACK/DEBIAN/control
     echo "Version: ${DEBv}" >> $DEB_PACK/DEBIAN/control
     echo "Architecture: ${DEB_ARCH}" >> $DEB_PACK/DEBIAN/control
-    echo "Maintainer: Admin" >> 
-$DEB_PACK/DEBIAN/control
+    echo "Maintainer: Admin" >> $DEB_PACK/DEBIAN/control
     echo "Priority: optional" >> $DEB_PACK/DEBIAN/control
     echo "Installed-Size: $(du -s $DEB_PACK/usr|awk '{print $1}')" >> $DEB_PACK/DEBIAN/control
 	echo "Section: devel" >> $DEB_PACK/DEBIAN/control
@@ -385,4 +438,12 @@ $DEB_PACK/DEBIAN/control
     fakeroot dpkg-deb --build $TOOL_DIR
     print_success "Toolchain was packed into the deb package $TOOL_DIR.deb"
     echo "deb" >> $RESULT_FILE
+    apt-get remove --purge -y md5deep fakeroot
 fi
+
+
+apt-get remove --purge -y g++ autoconf libtool bison wget texinfo
+apt-get autoremove -y
+apt-get autoclean -y
+apt-get clean -y
+rm -rf /tmp/* && rm -rf /var/cache/*
