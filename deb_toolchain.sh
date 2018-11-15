@@ -397,51 +397,48 @@ print_success "Toolchain for $TARGET is ready"
 print_success "Use $TARGET_CC for compile your projects"
 
 
-if [ -z ${MAKE_DEB} ]; then
-    exit 0
+if [ ! -z ${MAKE_DEB} ]; then
+    if ! grep -Fxq "deb" $RESULT_FILE; then
+        print_info "Start create deb package"
+        sudo apt-get -y install md5deep fakeroot
+        # Strip binary for deb
+        for item in $(file $DEB_PACK/$USR/bin/$TARGET*|grep ELF|tr : ' '|awk '{print $1}'); do
+            strip_debug "$item"
+        done
+        rm -rf $DEB_PACK/DEBIAN
+        rm -rf $DEB_PACK/usr/share
+        mkdir -p $DEB_PACK/DEBIAN
+        TOOL_DIR=$(echo $DEB_PACK|sed -e "s|$(pwd)/||")
+        NAME=$(echo $TOOL_DIR|sed 's/_/-/g')
+        echo "Package: $NAME" >> $DEB_PACK/DEBIAN/control
+        echo "Version: ${DEBv}" >> $DEB_PACK/DEBIAN/control
+        echo "Architecture: ${DEB_ARCH}" >> $DEB_PACK/DEBIAN/control
+        echo "Maintainer: Admin" >> $DEB_PACK/DEBIAN/control
+        echo "Priority: optional" >> $DEB_PACK/DEBIAN/control
+        echo "Installed-Size: $(du -s $DEB_PACK/usr|awk '{print $1}')" >> $DEB_PACK/DEBIAN/control
+    	echo "Section: devel" >> $DEB_PACK/DEBIAN/control
+        echo "Depends: make, autoconf, libtool" >> $DEB_PACK/DEBIAN/control
+        DEB_DESC="Description: ${DEB_TARGET} C/C++ toolchain with composition"
+        DEB_DESC+="\n .\n gcc $GCCv"
+        DEB_DESC+="\n .\n glibc $GLIBCv"
+        DEB_DESC+="\n .\n binutils $BINUTILSv"
+        DEB_DESC+="\n .\n mpfr $MPFRv"
+        DEB_DESC+="\n .\n gmp $GMPv"
+        DEB_DESC+="\n .\n mpc $MPCv"
+        DEB_DESC+="\n .\n isl $ISLv"
+        DEB_DESC+="\n .\n cloog $CLOOGv"
+        DEB_DESC+="\n .\n linux-kernel $KERNELv"
+        echo -e $DEB_DESC >> $DEB_PACK/DEBIAN/control
+
+        md5deep -l -o f -r $DEB_PACK/usr > $DEB_PACK/DEBIAN/md5sums
+        fakeroot dpkg-deb --build $TOOL_DIR
+        print_success "Toolchain was packed into the deb package $TOOL_DIR.deb"
+        echo "deb" >> $RESULT_FILE
+        apt-get remove --purge -y md5deep fakeroot
+    fi
 fi
 
-
-if ! grep -Fxq "deb" $RESULT_FILE; then
-    print_info "Start create deb package"
-    sudo apt-get -y install md5deep fakeroot
-    # Strip binary for deb
-    for item in $(file $DEB_PACK/$USR/bin/$TARGET*|grep ELF|tr : ' '|awk '{print $1}'); do
-        strip_debug "$item"
-    done
-    rm -rf $DEB_PACK/DEBIAN
-    rm -rf $DEB_PACK/usr/share
-    mkdir -p $DEB_PACK/DEBIAN
-    TOOL_DIR=$(echo $DEB_PACK|sed -e "s|$(pwd)/||")
-    NAME=$(echo $TOOL_DIR|sed 's/_/-/g')
-    echo "Package: $NAME" >> $DEB_PACK/DEBIAN/control
-    echo "Version: ${DEBv}" >> $DEB_PACK/DEBIAN/control
-    echo "Architecture: ${DEB_ARCH}" >> $DEB_PACK/DEBIAN/control
-    echo "Maintainer: Admin" >> $DEB_PACK/DEBIAN/control
-    echo "Priority: optional" >> $DEB_PACK/DEBIAN/control
-    echo "Installed-Size: $(du -s $DEB_PACK/usr|awk '{print $1}')" >> $DEB_PACK/DEBIAN/control
-	echo "Section: devel" >> $DEB_PACK/DEBIAN/control
-    echo "Depends: make, autoconf, libtool" >> $DEB_PACK/DEBIAN/control
-    DEB_DESC="Description: ${DEB_TARGET} C/C++ toolchain with composition"
-    DEB_DESC+="\n .\n gcc $GCCv"
-    DEB_DESC+="\n .\n glibc $GLIBCv"
-    DEB_DESC+="\n .\n binutils $BINUTILSv"
-    DEB_DESC+="\n .\n mpfr $MPFRv"
-    DEB_DESC+="\n .\n gmp $GMPv"
-    DEB_DESC+="\n .\n mpc $MPCv"
-    DEB_DESC+="\n .\n isl $ISLv"
-    DEB_DESC+="\n .\n cloog $CLOOGv"
-    DEB_DESC+="\n .\n linux-kernel $KERNELv"
-    echo -e $DEB_DESC >> $DEB_PACK/DEBIAN/control
-
-    md5deep -l -o f -r $DEB_PACK/usr > $DEB_PACK/DEBIAN/md5sums
-    fakeroot dpkg-deb --build $TOOL_DIR
-    print_success "Toolchain was packed into the deb package $TOOL_DIR.deb"
-    echo "deb" >> $RESULT_FILE
-    apt-get remove --purge -y md5deep fakeroot
-fi
-
-
+print_info "Remove unneeded files"
 apt-get remove --purge -y g++ autoconf libtool bison wget texinfo
 apt-get autoremove -y
 apt-get autoclean -y
