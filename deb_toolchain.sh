@@ -83,7 +83,7 @@ restore_output() {
 }
 
 download() {
-    SRC_ARC=$(echo $1|grep -o '[a-zA-Z0-9\.\-]\+\.tar\.[a-z2]\+'|head -n1)
+    SRC_ARC=$(echo $1|grep -o '[a-zA-Z0-9\.\-]\+\.tar\.[a-z0-9]\+'|head -n1)
     print_info "Start download $SRC_ARC"
     if [[ ! -f $SRC_ARC ]]; then
         wget -q $1
@@ -211,7 +211,6 @@ if [[ $KERNELv > 2.4 ]] && [[ $KERNELv < 2.5 ]]; then export KERNEL_GEN=v2.4; fi
 if [[ $KERNELv > 2.3 ]] && [[ $KERNELv < 2.4 ]]; then export KERNEL_GEN=v2.3; fi
 
 
-redirect_output
 print_info "Update apt-get"
 apt-get update && apt-get -y upgrade
 apt-get install -y g++ make gawk autoconf libtool bison wget texinfo
@@ -439,8 +438,7 @@ if [ ! -z ${MAKE_DEB} ]; then
 fi
 
 print_info "Remove unneeded files"
-apt-get remove --purge -y g++ autoconf libtool bison wget texinfo
-apt-get autoremove -y
+apt-get autoremove -y --purge g++ autoconf libtool bison texinfo
 apt-get autoclean -y
 apt-get clean -y
 rm -rf /tmp/* && rm -rf /var/cache/*

@@ -1,31 +1,58 @@
 #!/bin/bash
 
 # Set colors
-# Regular
-black="$(tput setaf 0 2>/dev/null || echo '\e[0;30m')"  # Black
-red="$(tput setaf 1 2>/dev/null || echo '\e[0;31m')"  # Red
-green="$(tput setaf 2 2>/dev/null || echo '\e[0;32m')"  # Green
-yellow="$(tput setaf 3 2>/dev/null || echo '\e[0;33m')"  # Yellow
-blue="$(tput setaf 4 2>/dev/null || echo '\e[0;34m')"  # Blue
-purple="$(tput setaf 5 2>/dev/null || echo '\e[0;35m')"  # Purple
-cyan="$(tput setaf 6 2>/dev/null || echo '\e[0;36m')"  # Cyan
-white="$(tput setaf 7 2>/dev/null || echo '\e[0;37m')"  # White
+if [ -f /.dockerenv ]; then
+    # Regular
+    black=""  # Black
+    red=""  # Red
+    green=""  # Green
+    yellow=""  # Yellow
+    blue=""  # Blue
+    purple=""  # Purple
+    cyan=""  # Cyan
+    white=""  # White
+    # Bold
+    BLACK=""  # Black
+    RED=""  # Red
+    GREEN=""  # Green
+    YELLOW=""  # Yellow
+    BLUE=""  # Blue
+    PURPLE=""  # Purple
+    CYAN=""  # Cyan
+    WHITE="" # White
+    # Reset
+    NC="" # Text Reset
+else
+    # Regular
+    black="$(tput setaf 0 2>/dev/null || echo '\e[0;30m')"  # Black
+    red="$(tput setaf 1 2>/dev/null || echo '\e[0;31m')"  # Red
+    green="$(tput setaf 2 2>/dev/null || echo '\e[0;32m')"  # Green
+    yellow="$(tput setaf 3 2>/dev/null || echo '\e[0;33m')"  # Yellow
+    blue="$(tput setaf 4 2>/dev/null || echo '\e[0;34m')"  # Blue
+    purple="$(tput setaf 5 2>/dev/null || echo '\e[0;35m')"  # Purple
+    cyan="$(tput setaf 6 2>/dev/null || echo '\e[0;36m')"  # Cyan
+    white="$(tput setaf 7 2>/dev/null || echo '\e[0;37m')"  # White
+    # Bold
+    BLACK="$(tput setaf 0 2>/dev/null)$(tput bold 2>/dev/null || echo '\e[1;30m')"  # Black
+    RED="$(tput setaf 1 2>/dev/null)$(tput bold 2>/dev/null || echo '\e[1;31m')"  # Red
+    GREEN="$(tput setaf 2 2>/dev/null)$(tput bold 2>/dev/null || echo '\e[1;32m')"  # Green
+    YELLOW="$(tput setaf 3 2>/dev/null)$(tput bold 2>/dev/null || echo '\e[1;33m')"  # Yellow
+    BLUE="$(tput setaf 4 2>/dev/null)$(tput bold 2>/dev/null || echo '\e[1;34m')"  # Blue
+    PURPLE="$(tput setaf 5 2>/dev/null)$(tput bold 2>/dev/null || echo '\e[1;35m')"  # Purple
+    CYAN="$(tput setaf 6 2>/dev/null)$(tput bold 2>/dev/null || echo '\e[1;36m')"  # Cyan
+    WHITE="$(tput setaf 7 2>/dev/null)$(tput bold 2>/dev/null || echo '\e[1;37m')" # White
+    # Reset
+    NC="$(tput sgr 0 2>/dev/null || echo '\e[0m')" # Text Reset
+fi
 
-# Bold
-BLACK="$(tput setaf 0 2>/dev/null)$(tput bold 2>/dev/null || echo '\e[1;30m')"  # Black
-RED="$(tput setaf 1 2>/dev/null)$(tput bold 2>/dev/null || echo '\e[1;31m')"  # Red
-GREEN="$(tput setaf 2 2>/dev/null)$(tput bold 2>/dev/null || echo '\e[1;32m')"  # Green
-YELLOW="$(tput setaf 3 2>/dev/null)$(tput bold 2>/dev/null || echo '\e[1;33m')"  # Yellow
-BLUE="$(tput setaf 4 2>/dev/null)$(tput bold 2>/dev/null || echo '\e[1;34m')"  # Blue
-PURPLE="$(tput setaf 5 2>/dev/null)$(tput bold 2>/dev/null || echo '\e[1;35m')"  # Purple
-CYAN="$(tput setaf 6 2>/dev/null)$(tput bold 2>/dev/null || echo '\e[1;36m')"  # Cyan
-WHITE="$(tput setaf 7 2>/dev/null)$(tput bold 2>/dev/null || echo '\e[1;37m')" # White
-
-# Reset
-NC="$(tput sgr 0 2>/dev/null || echo '\e[0m')" # Text Reset
-
-LOG_FILE=$(pwd)/output.log
-ERROR_FILE=$(pwd)/error.log
+if [ -f /.dockerenv ]; then
+    LOG_FILE=""
+    ERROR_FILE=""
+else
+    LOG_FILE=$(pwd)/$1-output.log
+    ERROR_FILE=$(pwd)/$1-error.log
+fi
+RESULT_FILE=$(pwd)/$1-result.log
 # Clear logs
 rm -rf $LOG_FILE $ERROR_FILE
 
@@ -33,22 +60,30 @@ rm -rf $LOG_FILE $ERROR_FILE
 trap 'previous_command=$this_command; this_command=$BASH_COMMAND' DEBUG
 
 redirect_output() {
-    # Save stdout and stderr
-    exec 3>&1 4>&2
-    # Set output log files
-    exec 2>>$ERROR_FILE
-    exec 1>>$LOG_FILE
+    if [ -f /.dockerenv ]; then
+        return
+    else
+        # Save stdout and stderr
+        exec 3>&1 4>&2
+        # Set output log files
+        exec 2>>$ERROR_FILE
+        exec 1>>$LOG_FILE
+    fi
 }
 
 restore_output() {
-    # Restore original stdout/stderr
-    exec 1>&3 2>&4
-    # Close the unused descriptors
-    exec 3>&- 4>&-
+    if [ -f /.dockerenv ]; then
+        return
+    else
+        # Restore original stdout/stderr
+        exec 1>&3 2>&4
+        # Close the unused descriptors
+        exec 3>&- 4>&-
+    fi
 }
 
 download() {
-    SRC_ARC=$(echo $1|grep -o '[a-zA-Z0-9\.\-]\+\.tar\.[a-z]\+'|head -n1)
+    SRC_ARC=$(echo $1|grep -o '[a-zA-Z0-9\.\-]\+\.tar\.[a-z0-9]\+'|head -n1)
     print_info "Start download $SRC_ARC"
     if [ ! -f $SRC_ARC ]; then
         wget -q $1
@@ -104,12 +139,13 @@ err_report() {
 }
 
 init() {
-    TOOLCHAIN_DIR=/opt/buildroot
+    TOOLCHAIN_DIR=/usr
     export TARGET_CC="$TARGET-gcc $CFLAGS_FOR_TARGET"
+    export TARGET_CXX="$TARGET-g++ $CFLAGS_FOR_TARGET"
 
     export USR=$TOOLCHAIN_DIR
     if [[ -z $PREFIX ]]; then
-        export PREFIX=$TOOLCHAIN_DIR
+        export PREFIX=$USR/$TARGET
     fi
     export PATH=$PATH:$PREFIX/bin:$USR/bin
     export PARALLEL_MAKE=-j3
@@ -123,7 +159,9 @@ init() {
     export DEB_TARGET=$1 #$(echo $TARGET|tr '-' ' '|awk '{print $1}')
     export DEB_PACK=$(pwd)/${DEB_TARGET}_tools_v${DEBv}_${DEB_ARCH}
     export TMP_BUILD_DIR=$(pwd)/$DEB_TARGET-cross
-    export TOOLS_BIN_DIR=$(pwd)/BIN
+    if [[ -z $TOOLS_BIN_DIR ]]; then
+        export TOOLS_BIN_DIR=$(pwd)/BIN
+    fi
     if [[ $1 == x86 ]]; then
         export BUILDTARGET="--build=$TARGET"
     else
@@ -164,12 +202,17 @@ optional arguments:
                   agent - ${LIBS[@]::6}
                   $(echo ${LIBS[*]}|sed 's/ /\n                  /g')
   -i              Run "make install" for selected tools
-  -v, --verbose   Set debug level
+  -o              Binary output directory
   -d              Create DEB package
 EOF
     redirect_output
     exit 1
 }
+
+print_info "Update apt-get"
+apt-get update && apt-get -y upgrade
+apt-get install -y make gawk wget
+apt-get -y autoremove
 
 
 trap 'err_report $LINENO $BASH_LINENO "$BASH_COMMAND" $(printf "::%s" ${FUNCNAME[@]:-})' ERR
@@ -214,7 +257,7 @@ export POPT_LINK=http://rpm5.org/files/popt/popt-$POPTv.tar.gz
 export BEECRYPT_LINK=http://prdownloads.sourceforge.net/beecrypt/beecrypt-$BEECRYPTv.tar.gz
 export LDB_LINK=http://download.oracle.com/berkeley-db/db-$LDBv.tar.gz
 export CURL_LINK=https://curl.haxx.se/download/curl-$CURLv.tar.gz
-export WGET_LINK=http://ftp.gnu.org/gnu/wget/wget-$WGETv.tar.xz
+export WGET_LINK=http://ftp.gnu.org/gnu/wget/wget-$WGETv.tar.gz
 export TOR_LINK=https://www.torproject.org/dist/tor-$TORv.tar.gz
 export SSH_LINK=http://ftp.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-$SSHv.tar.gz
 export DROPBEAR_LINK=https://matt.ucc.asn.au/dropbear/releases/dropbear-$DROPBEARv.tar.bz2
@@ -224,7 +267,7 @@ export RPM_LINK=http://ftp.rpm.org/releases/rpm-4.12.x/rpm-$RPMv.tar.bz2
 export JOE_LINK=https://sourceforge.net/projects/joe-editor/files/JOE%20sources/joe-$JOEv/joe-$JOEv.tar.gz
 export E2TOOLS_LINK=http://home.earthlink.net/~k_sheff/sw/e2tools/e2tools-$E2TOOLSv.tar.gz
 export EMPTY_LINK=https://downloads.sourceforge.net/project/empty/empty/empty-$EMPTYv/empty-$EMPTYv.tgz
-export GDB_LINK=https://ftp.gnu.org/gnu/gdb/gdb-$GDBv.tar.xz
+export GDB_LINK=https://ftp.gnu.org/gnu/gdb/gdb-$GDBv.tar.gz
 
 
 ARCHS=(armel armbe mipsel mips x86 powerpc tile)
@@ -254,9 +297,13 @@ zlib_build() {
     download $ZLIB_LINK
     print_info "Compile zlib"
     cd zlib-$ZLIBv
-    CFLAGS="-static -s" CC="$TARGET_CC" ./configure --prefix=$PREFIX --static
+    CFLAGS="-static -s" CC="$TARGET_CC" ./configure \
+        --prefix=$PREFIX \
+        --static
     make $PARALLEL_MAKE
-    make DESTDIR=$DEB_PACK install
+    if [[ -e $CREATE_DEB ]]; then
+        make DESTDIR=$DEB_PACK install
+    fi
     make install
     cd ..
     DEB_DESC+="\n .\n zlib-$ZLIBv"
@@ -267,6 +314,7 @@ zlib_build() {
 openssl_build() {
     download $SSL_LINK
     print_info "Compile OpenSSL"
+    apt-get install -y libfile-dircompare-perl
     cd openssl-$OPENSSLv
     if [[ $1 == x86 ]]; then
         LDFLAGS="-static -s" CFLAGS=" -static -s -O2" CC="$TARGET_CC" ./config --prefix=$PREFIX no-shared --openssldir=$PREFIX
@@ -277,16 +325,18 @@ openssl_build() {
     fi
     make $PARALLEL_MAKE
     make install
-    # Create DEB
-    if [[ $1 == x86 ]]; then
-        LDFLAGS="-static -s" CFLAGS=" -static -s -O2" CC="$TARGET_CC" ./config --prefix=$DEB_PACK/$PREFIX no-shared --openssldir=$DEB_PACK/$PREFIX
-    elif [[ $1 == powerpc ]]; then
-        LDFLAGS="-static -s" CFLAGS=" -static -s -O2" CC="$TARGET_CC" ./Configure $SSL_ARCH --prefix=$DEB_PACK/$PREFIX no-shared --openssldir=$DEB_PACK/$PREFIX -fPIC -I$PREFIX/include -L$PREFIX/lib
-    else
-        LDFLAGS="-static -s" CFLAGS=" -static -s -O2" CC="$TARGET_CC" ./Configure $SSL_ARCH --prefix=$DEB_PACK/$PREFIX no-shared --openssldir=$DEB_PACK/$PREFIX -march=$SSL_MARCH -fPIC -I$PREFIX/include -L$PREFIX/lib
+    if [[ -e $CREATE_DEB ]]; then
+        # Create DEB
+        if [[ $1 == x86 ]]; then
+            LDFLAGS="-static -s" CFLAGS=" -static -s -O2" CC="$TARGET_CC" ./config --prefix=$DEB_PACK/$PREFIX no-shared --openssldir=$DEB_PACK/$PREFIX
+        elif [[ $1 == powerpc ]]; then
+            LDFLAGS="-static -s" CFLAGS=" -static -s -O2" CC="$TARGET_CC" ./Configure $SSL_ARCH --prefix=$DEB_PACK/$PREFIX no-shared --openssldir=$DEB_PACK/$PREFIX -fPIC -I$PREFIX/include -L$PREFIX/lib
+        else
+            LDFLAGS="-static -s" CFLAGS=" -static -s -O2" CC="$TARGET_CC" ./Configure $SSL_ARCH --prefix=$DEB_PACK/$PREFIX no-shared --openssldir=$DEB_PACK/$PREFIX -march=$SSL_MARCH -fPIC -I$PREFIX/include -L$PREFIX/lib
+        fi
+        make $PARALLEL_MAKE
+        make install
     fi
-    make $PARALLEL_MAKE
-    make install
     cd ..
 
     # Test openssl
@@ -302,10 +352,17 @@ libevent_build() {
     download $EVENT_LINK
     print_info "Compile libEvent"
     mkdir libevent-$LIBEVENTv-build && cd libevent-$LIBEVENTv-build
-    LDFLAGS="-static -s" CFLAGS="-static -O3 -s -ldl" CC="$TARGET_CC" ../libevent-$LIBEVENTv/configure --host=$TARGET --with-pic --prefix=$PREFIX --enable-static $BUILDTARGET
+    LDFLAGS="-static -s" CFLAGS="-static -O2 -s -ldl" CC="$TARGET_CC" ../libevent-$LIBEVENTv/configure \
+        --host=$TARGET \
+        --with-pic \
+        --prefix=$PREFIX \
+        --enable-static \
+        $BUILDTARGET
     make $PARALLEL_MAKE
     make install
-    make DESTDIR=$DEB_PACK install
+    if [[ -e $CREATE_DEB ]]; then
+        make DESTDIR=$DEB_PACK install
+    fi
     cd ..
 
     # Test libevent
@@ -321,10 +378,17 @@ libtasn1_build() {
     download $TASN1_LINK
     print_info "Compile libTasn1"
     mkdir libtasn1-$LIBTASN1v-build && cd libtasn1-$LIBTASN1v-build
-    LDFLAGS="-static -s" CFLAGS="-static -O3 -s" CC="$TARGET_CC" ../libtasn1-$LIBTASN1v/configure --prefix=$PREFIX --host=$TARGET --disable-doc --enable-static $BUILDTARGET
+    LDFLAGS="-static -s" CFLAGS="-static -O2 -s" CC="$TARGET_CC" ../libtasn1-$LIBTASN1v/configure \
+        --prefix=$PREFIX \
+        --host=$TARGET \
+        --disable-doc \
+        --enable-static \
+        $BUILDTARGET
     make $PARALLEL_MAKE
     make install-strip
-    make DESTDIR=$DEB_PACK install-strip
+    if [[ -e $CREATE_DEB ]]; then
+        make DESTDIR=$DEB_PACK install-strip
+    fi
     cd ..
 
     # Test libtasn1
@@ -342,9 +406,9 @@ flex_build() {
     mkdir flex-$FLEXv-build && cd flex-$FLEXv-build
     if [[ $(uname -m) == x86_64 ]]; then
         apt-get -y install gcc-multilib
-        LDFLAGS="-static -s" CFLAGS="-static -O3 -s" CXXFLAGS=$CFLAGS CC="$TARGET_CC" ../flex-$FLEXv/configure --prefix=$PREFIX --enable-static --host=$TARGET $BUILDTARGET CFLAGS_FOR_BUILD="-s -O3 -m32"
+        LDFLAGS="-static -s" CFLAGS="-static -O2 -s" CXXFLAGS=$CFLAGS CC="$TARGET_CC" ../flex-$FLEXv/configure --prefix=$PREFIX --enable-static --host=$TARGET $BUILDTARGET CFLAGS_FOR_BUILD="-s -O2 -m32"
     else
-        LDFLAGS="-static -s" CFLAGS="-static -O3 -s" CXXFLAGS=$CFLAGS CC="$TARGET_CC" ../flex-$FLEXv/configure --prefix=$PREFIX --enable-static --host=$TARGET $BUILDTARGET
+        LDFLAGS="-static -s" CFLAGS="-static -O2 -s" CXXFLAGS=$CFLAGS CC="$TARGET_CC" ../flex-$FLEXv/configure --prefix=$PREFIX --enable-static --host=$TARGET $BUILDTARGET
     fi
     make $PARALLEL_MAKE
     make install-strip
@@ -352,9 +416,9 @@ flex_build() {
     if [[ $1 != x86 ]] || [[ $1 != i686 ]]; then
         rm -rf $PREFIX/bin/flex*
         if [[ $(uname -m) == x86_64 ]]; then
-            LDFLAGS="-static -s" CFLAGS="-static -O3 -s" CXXFLAGS=$CFLAGS CC=gcc ../flex-$FLEXv/configure --prefix=$PREFIX --enable-static --disable-libfl CFLAGS_FOR_BUILD="-s -O3 -m32"
+            LDFLAGS="-static -s" CFLAGS="-static -O2 -s" CXXFLAGS=$CFLAGS CC=gcc ../flex-$FLEXv/configure --prefix=$PREFIX --enable-static --disable-libfl CFLAGS_FOR_BUILD="-s -O2 -m32"
         else
-            LDFLAGS="-static -s" CFLAGS="-static -O3 -s" CXXFLAGS=$CFLAGS CC=gcc ../flex-$FLEXv/configure --prefix=$PREFIX --enable-static --disable-libfl
+            LDFLAGS="-static -s" CFLAGS="-static -O2 -s" CXXFLAGS=$CFLAGS CC=gcc ../flex-$FLEXv/configure --prefix=$PREFIX --enable-static --disable-libfl
         fi
         make $PARALLEL_MAKE
         make install-strip
@@ -377,10 +441,17 @@ libpcap_build() {
     download $PCAP_LINK
     print_info "Compile libPcap"
     mkdir libpcap-$LIBPCAPv-build && cd libpcap-$LIBPCAPv-build
-    LDFLAGS="-static -s" CFLAGS="-static -O3 -s" CC="$TARGET_CC" ../libpcap-$LIBPCAPv/configure --prefix=$PREFIX --host=$TARGET --with-pcap=linux --disable-shared $BUILDTARGET
+    LDFLAGS="-static -s" CFLAGS="-static -O2 -s" CC="$TARGET_CC" ../libpcap-$LIBPCAPv/configure \
+        --prefix=$PREFIX \
+        --host=$TARGET \
+        --with-pcap=linux \
+        --disable-shared \
+        $BUILDTARGET
     make $PARALLEL_MAKE
     make install
-    make DESTDIR=$DEB_PACK install
+    if [[ -e $CREATE_DEB ]]; then
+        make DESTDIR=$DEB_PACK install
+    fi
     cd ..
 
     # Test libpcap
@@ -396,9 +467,19 @@ libarchive_build() {
     download $ARCHIVE_LINK
     print_info "Compile libArchive"
     mkdir libarchive-$LIBARCHIVEv-build && cd libarchive-$LIBARCHIVEv-build
-    LDFLAGS="-static -s" CFLAGS="-static -s -O3" CC="$TARGET_CC" ../libarchive-$LIBARCHIVEv/configure --prefix=$PREFIX --host=$TARGET --enable-static --without-xml2 --without-lzma --without-openssl --with-zlib $BUILDTARGET
+    LDFLAGS="-static -s" CFLAGS="-static -s -O2" CC="$TARGET_CC" ../libarchive-$LIBARCHIVEv/configure \
+        --prefix=$PREFIX \
+        --host=$TARGET \
+        --enable-static \
+        --without-xml2 \
+        --without-lzma \
+        --without-openssl \
+        --with-zlib \
+        $BUILDTARGET
     make $PARALLEL_MAKE
-    make DESTDIR=$DEB_PACK install-strip
+    if [[ -e $CREATE_DEB ]]; then
+        make DESTDIR=$DEB_PACK install-strip
+    fi
     make install-strip
     cd ..
 
@@ -415,9 +496,22 @@ e2fsprogs_build() {
     download $E2FSPROGS_LINK
     print_info "Compile e2fsprogs"
     mkdir e2fsprogs-$E2FSv-build && cd e2fsprogs-$E2FSv-build
-    LDFLAGS="-static -s" CFLAGS="-s -static -O3" CC="$TARGET_CC" ../e2fsprogs-$E2FSv/configure --prefix=$PREFIX --host=$TARGET --disable-threads --disable-tls --disable-uuidd --disable-nls --disable-defrag --disable-debugfs --disable-testio-debug --disable-fsck $BUILDTARGET
+    LDFLAGS="-static -s" CFLAGS="-s -static -O2" CC="$TARGET_CC" ../e2fsprogs-$E2FSv/configure \
+        --prefix=$PREFIX \
+        --host=$TARGET \
+        --disable-threads \
+        --disable-tls \
+        --disable-uuidd \
+        --disable-nls \
+        --disable-defrag \
+        --disable-debugfs \
+        --disable-testio-debug \
+        --disable-fsck \
+        $BUILDTARGET
     make $PARALLEL_MAKE
-    make DESTDIR=$DEB_PACK install-libs
+    if [[ -e $CREATE_DEB ]]; then
+        make DESTDIR=$DEB_PACK install-libs
+    fi
     make install-libs
     cd ..
 
@@ -434,9 +528,17 @@ magic_build() {
     download $LMAGIC_LINK
     print_info "Compile libMagic"
     mkdir file-$LMAGICv-build && cd file-$LMAGICv-build
-    LDFLAGS="-static -s" CFLAGS="-s -w -static -O3" CC="$TARGET_CC" ../file-$LMAGICv/configure --prefix=$PREFIX --host=$TARGET --enable-static --includedir=$PREFIX/include --libdir=$PREFIX/lib $BUILDTARGET
+    LDFLAGS="-static -s" CFLAGS="-s -w -static -O2" CC="$TARGET_CC" ../file-$LMAGICv/configure \
+        --prefix=$PREFIX \
+        --host=$TARGET \
+        --enable-static \
+        --includedir=$PREFIX/include \
+        --libdir=$PREFIX/lib \
+        $BUILDTARGET
     make $PARALLEL_MAKE
-    make DESTDIR=$DEB_PACK install-strip
+    if [[ -e $CREATE_DEB ]]; then
+        make DESTDIR=$DEB_PACK install-strip
+    fi
     make install-strip
     cd ..
 
@@ -453,9 +555,16 @@ popt_build() {
     download $POPT_LINK
     print_info "Compile libPopt"
     mkdir popt-$POPTv-build && cd popt-$POPTv-build
-    LDFLAGS="-static -s" CFLAGS="-s -static -O3" CC="$TARGET_CC" ../popt-$POPTv/configure --prefix=$PREFIX --host=$TARGET --enable-static --disable-nls $BUILDTARGET
+    LDFLAGS="-static -s" CFLAGS="-s -static -O2" CC="$TARGET_CC" ../popt-$POPTv/configure \
+        --prefix=$PREFIX \
+        --host=$TARGET \
+        --enable-static \
+        --disable-nls \
+        $BUILDTARGET
     make $PARALLEL_MAKE
-    make DESTDIR=$DEB_PACK install-strip
+    if [[ -e $CREATE_DEB ]]; then
+        make DESTDIR=$DEB_PACK install-strip
+    fi
     make install-strip
     cd ..
 
@@ -472,9 +581,18 @@ beecrypt_build() {
     download $BEECRYPT_LINK
     print_info "Compile beecrypt"
     mkdir beecrypt-$BEECRYPTv-build && cd beecrypt-$BEECRYPTv-build
-    LDFLAGS="-static -s" CFLAGS="-s -static -O3" CC="$TARGET_CC" ../beecrypt-$BEECRYPTv/configure --prefix=$PREFIX --host=$TARGET --enable-static --enable-openmp --disable-debug --without-java $BUILDTARGET
+    LDFLAGS="-static -s" CFLAGS="-s -static -O2" CC="$TARGET_CC" ../beecrypt-$BEECRYPTv/configure \
+        --prefix=$PREFIX \
+        --host=$TARGET \
+        --enable-static \
+        --enable-openmp \
+        --disable-debug \
+        --without-java \
+        $BUILDTARGET
     make $PARALLEL_MAKE
-    make DESTDIR=$DEB_PACK install-strip
+    if [[ -e $CREATE_DEB ]]; then
+        make DESTDIR=$DEB_PACK install-strip
+    fi
     make install-strip
     cd ..
 
@@ -491,9 +609,16 @@ db_build() {
     download $LDB_LINK
     print_info "Compile libDB"
     mkdir db-$LDBv-build && cd db-$LDBv-build
-    LDFLAGS="-static -s" CFLAGS="-s -static -O3" CC="$TARGET_CC" ../db-$LDBv/dist/configure --prefix=$PREFIX --host=$TARGET --disable-java --enable-static $BUILDTARGET
+    LDFLAGS="-static -s" CFLAGS="-s -static -O2" CC="$TARGET_CC" ../db-$LDBv/dist/configure \
+        --prefix=$PREFIX \
+        --host=$TARGET \
+        --disable-java \
+        --enable-static \
+        $BUILDTARGET
     make $PARALLEL_MAKE
-    make DESTDIR=$DEB_PACK install_lib install_include
+    if [[ -e $CREATE_DEB ]]; then
+        make DESTDIR=$DEB_PACK install_lib install_include
+    fi
     make install_lib install_include
     cd ..
 
@@ -510,10 +635,12 @@ curl_build() {
     download $CURL_LINK
     print_info "Compile libCURL. Please check that you have installed zLib and OpenSSL"
     mkdir curl-$CURLv-build && cd curl-$CURLv-build
-    LIBS="-ldl" CFLAGS="-s -static -O3 -fPIC -I$PREFIX/include" CPPFLAGS="-DCURL_STATICLIB" LDFLAGS="-Wl,-static -s -L$PREFIX/lib" CC=$TARGET_CC ../curl-$CURLv/configure --host=$TARGET --target=$TARGET --prefix=$PREFIX --disable-rt --enable-http --enable-cookies --disable-ipv6 --disable-ftp --disable-ldap --disable-ldaps --disable-rtsp --with-proxy --disable-dict --disable-telnet --disable-tftp --disable-pop3 --disable-imap --disable-smb --disable-smtp --disable-gopher --disable-pthreads --disable-crypto-auth --disable-sspi --disable-shared --enable-static --disable-debug --disable-curldebug --with-zlib --with-ssl=$PREFIX --without-axtls
+    LIBS="-ldl" CFLAGS="-s -static -O2 -fPIC -I$PREFIX/include" CPPFLAGS="-DCURL_STATICLIB" LDFLAGS="-Wl,-static -s -L$PREFIX/lib" CC=$TARGET_CC ../curl-$CURLv/configure --host=$TARGET --target=$TARGET --prefix=$PREFIX --disable-rt --enable-http --enable-cookies --disable-ipv6 --disable-ftp --disable-ldap --disable-ldaps --disable-rtsp --with-proxy --disable-dict --disable-telnet --disable-tftp --disable-pop3 --disable-imap --disable-smb --disable-smtp --disable-gopher --disable-pthreads --disable-crypto-auth --disable-sspi --disable-shared --enable-static --disable-debug --disable-curldebug --with-zlib --with-ssl=$PREFIX --without-axtls
     make $PARALLEL_MAKE
     strip_debug src/curl
-    make DESTDIR=$DEB_PACK install-strip
+    if [[ -e $CREATE_DEB ]]; then
+        make DESTDIR=$DEB_PACK install-strip
+    fi
     make install-strip
 
     # Test libdb
@@ -534,7 +661,14 @@ wget_build() {
     download $WGET_LINK
     print_info "Compile WGET"
     mkdir wget-$WGETv-build && cd wget-$WGETv-build
-    LDFLAGS="-static -s" CFLAGS="-s -static -O3" CC="$TARGET_CC" ../wget-$WGETv/configure --prefix=$PREFIX --host=$TARGET --disable-ntlm --disable-ipv6 --disable-debug --without-zlib --without-ssl
+    LDFLAGS="-static -s" CFLAGS="-s -static -O2" CC="$TARGET_CC" ../wget-$WGETv/configure \
+        --prefix=$PREFIX \
+        --host=$TARGET \
+        --disable-ntlm \
+        --disable-ipv6 \
+        --disable-debug \
+        --without-zlib \
+        --without-ssl
     make $PARALLEL_MAKE
     strip_debug ./src/wget
     cp ./src/wget $TOOLS_BIN_DIR/wget_${DEB_TARGET}
@@ -546,7 +680,7 @@ tor_build() {
     download $TOR_LINK
     print_info "Compile Tor"
     mkdir tor-$TORv-build && cd tor-$TORv-build
-    LIBS="-lcrypto -ldl" LDFLAGS="-s -static -L$PREFIX/lib" CFLAGS="-static -s -O3 -I$PREFIX/include" CC="$TARGET_CC" ../tor-$TORv/configure --host=$TARGET --disable-gcc-hardening --prefix=$PREFIX --enable-static-openssl --enable-static-zlib --enable-static-tor --enable-static-libevent --with-libevent-dir=$PREFIX --with-zlib-dir=$PREFIX --with-openssl-dir=$PREFIX
+    LIBS="-lcrypto -ldl" LDFLAGS="-s -static -L$PREFIX/lib" CFLAGS="-static -s -O2 -I$PREFIX/include" CC="$TARGET_CC" ../tor-$TORv/configure --host=$TARGET --disable-gcc-hardening --prefix=$PREFIX --enable-static-openssl --enable-static-zlib --enable-static-tor --enable-static-libevent --with-libevent-dir=$PREFIX --with-zlib-dir=$PREFIX --with-openssl-dir=$PREFIX
     make $PARALLEL_MAKE
     strip_debug ./src/or/tor
     cp ./src/or/tor $TOOLS_BIN_DIR/tor_${DEB_TARGET}
@@ -559,7 +693,14 @@ ssh_build() {
     download $SSH_LINK
     print_info "Compile SSH"
     mkdir openssh-$SSHv-build && cd openssh-$SSHv-build
-    LDFLAGS="-s -Wl,-static" CFLAGS="-s -static -I/usr/$TARGET/include" CC="$TARGET_CC" ../openssh-$SSHv/configure --target=$TARGET --host=$TARGET --with-md5-passwords --with-zlib=$PREFIX --with-ssl-dir=$PREFIX --enable-strip --enable-static
+    LDFLAGS="-s -Wl,-static" CFLAGS="-s -static -I/usr/$TARGET/include" CC="$TARGET_CC" ../openssh-$SSHv/configure \
+        --target=$TARGET \
+        --host=$TARGET \
+        --with-md5-passwords \
+        --with-zlib=$PREFIX \
+        --with-ssl-dir=$PREFIX \
+        --enable-strip \
+        --enable-static
     make $PARALLEL_MAKE
     strip_debug ssh
     strip_debug sshd
@@ -575,7 +716,13 @@ dropbear_build() {
     download $DROPBEAR_LINK
     print_info "Compile Dropbear"
     mkdir dropbear-$DROPBEARv-build && cd dropbear-$DROPBEARv-build
-    LDFLAGS="-s -static" CC="$TARGET_CC"../dropbear-$DROPBEARv/configure --target=$TARGET --host=$TARGET --disable-wtmpx --disable-wtmp --disable-utmpx --disable-utmp
+    LDFLAGS="-s -static -O2" CC="$TARGET_CC" ../dropbear-$DROPBEARv/configure \
+        --target=$TARGET \
+        --host=$TARGET \
+        --disable-wtmpx \
+        --disable-wtmp \
+        --disable-utmpx \
+        --disable-utmp
     make $PARALLEL_MAKE
     strip_debug dropbear
     strip_debug dbclient
@@ -589,10 +736,15 @@ python2_build() {
     download $PYTHON2_LINK
     print_info "Compile Python$PYTHON2v"
     mkdir python-$PYTHON2v-build && cd python-$PYTHON2v-build
-    CFLAGS="-static -s -O3" CC="$TARGET_CC" ../Python-$PYTHON2v/configure --prefix=$PREFIX --target=$TARGET --enable-optimizations
+    CFLAGS="-static -s -O2" CC="$TARGET_CC" ../Python-$PYTHON2v/configure \
+        --prefix=$PREFIX \
+        --target=$TARGET \
+        --enable-optimizations
     make $PARALLEL_MAKE
     make install
-    make DESTDIR=$DEB_PACK install
+    if [[ -e $CREATE_DEB ]]; then
+        make DESTDIR=$DEB_PACK install
+    fi
     cd ..
 }
 
@@ -601,10 +753,14 @@ python3_build() {
     download $PYTHON3_LINK
     print_info "Compile Python$PYTHON3v"
     mkdir python-$PYTHON3v-build && cd python-$PYTHON3v-build
-    RANLIB=$TARGET-ranlib CC="$TARGET_CC" CFLAGS="-static -s" ../Python-$PYTHON3v/configure --prefix=$PREFIX --target=$TARGET
+    RANLIB=$TARGET-ranlib CC="$TARGET_CC" CFLAGS="-static -s" ../Python-$PYTHON3v/configure \
+        --prefix=$PREFIX \
+        --target=$TARGET
     make $PARALLEL_MAKE
     make install
-    make DESTDIR=$DEB_PACK install
+    if [[ -e $CREATE_DEB ]]; then
+        make DESTDIR=$DEB_PACK install
+    fi
     cd ..
 }
 
@@ -612,10 +768,23 @@ rpm_build() {
     download $RPM_LINK
     print_info "Compile RPM"
     mkdir rpm-$RPMv-build && cd rpm-$RPMv-build
-    LIBS="-lz" LDFLAGS="-static -s" CFLAGS="-s -static -O3 -I$PREFIX/include/beecrypt" CC="$TARGET_CC" ../rpm-$RPMv/configure --prefix=$PREFIX --host=$TARGET --without-cap --without-lua --with-beecrypt  --disable-nls --enable-static --with-external-db --without-selinux --without-hackingdocs $BUILDTARGET
+    LIBS="-lz" LDFLAGS="-static -s" CFLAGS="-s -static -O2 -I$PREFIX/include/beecrypt" CC="$TARGET_CC" ../rpm-$RPMv/configure \
+        --prefix=$PREFIX \
+        --host=$TARGET \
+        --without-cap \
+        --without-lua \
+        --with-beecrypt \
+        --disable-nls \
+        --enable-static \
+        --with-external-db \
+        --without-selinux \
+        --without-hackingdocs \
+        $BUILDTARGET
     make $PARALLEL_MAKE
     make install-strip
-    make DESTDIR=$DEB_PACK install-strip
+    if [[ -e $CREATE_DEB ]]; then
+        make DESTDIR=$DEB_PACK install-strip
+    fi
     cd ..
 }
 
@@ -634,11 +803,16 @@ e2tools_build() {
     download $E2TOOLS_LINK
     print_info "Compile e2tools"
     mkdir e2tools-$E2TOOLSv-build && cd e2tools-$E2TOOLSv-build
-    LIBS="-pthread" LDFLAGS="-Wl,-static -s" CFLAGS="-s -w -static -O2" CC="$TARGET_CC" ../e2tools-$E2TOOLSv/configure --prefix=$PREFIX --host=$TARGET $BUILDTARGET
+    LIBS="-pthread" LDFLAGS="-Wl,-static -s" CFLAGS="-s -w -static -O2" CC="$TARGET_CC" ../e2tools-$E2TOOLSv/configure \
+        --prefix=$PREFIX \
+        --host=$TARGET \
+        $BUILDTARGET
     make $PARALLEL_MAKE
     strip_debug e2cp
     make install-strip
-    make DESTDIR=$DEB_PACK install-strip
+    if [[ -e $CREATE_DEB ]]; then
+        make DESTDIR=$DEB_PACK install-strip
+    fi
     cd ..
 }
 
@@ -647,7 +821,12 @@ joe_build() {
     download $JOE_LINK
     print_info "Compile joe"
     cd joe-$JOEv
-    LDFLAGS="-Wl,-static -s" CFLAGS="-static -s -O2" CC="$TARGET_CC" ./configure --prefix=$PREFIX --target=$TARGET --host=$TARGET --disable-curses --disable-termcap
+    LDFLAGS="-Wl,-static -s" CFLAGS="-static -s -O2" CC="$TARGET_CC" ./configure \
+        --prefix=$PREFIX \
+        --target=$TARGET \
+        --host=$TARGET \
+        --disable-curses \
+        --disable-termcap
     make $PARALLEL_MAKE
     strip_debug ./joe/joe
     cp ./joe/joe $TOOLS_BIN_DIR/joe_${DEB_TARGET}
@@ -657,18 +836,18 @@ joe_build() {
 
 gdb_build() {
     download $GDB_LINK
+    apt-get install gcc g++
     print_info "Compile gdb"
     mkdir gdb-$GDBv-build && cd gdb-$GDBv-build
     sed -i 's/*argp ==/*argp[0] ==/' ../gdb-$GDBv/gdb/location.c
     for x in $(grep -rl "RDYNAMIC=[\'\"]-Wl.*[\'\"]" ../gdb-7.12/); do sed -i "s|RDYNAMIC=[\'\"]-Wl.*[\'\"]|RDYNAMIC=\"\"|g" $x; done
-    LDFLAGS="-s -static -L$PREFIX/lib" CFLAGS="-s -static -O2 -I$PREFIX/include" CXXFLAGS=$CFLAGS CC="$TARGET_CC" ../gdb-$GDBv/configure \
-    	--host=$TARGET \
-    	--target=$TARGET \
-    	--with-system-zlib \
-    	--without-guile \
-    	--disable-libada \
-    	--enable-gdbserver \
-    	--with-endian=little
+    LDFLAGS="-s -static -L$PREFIX/lib" CFLAGS="-s -static -O2 -I$PREFIX/include" CXXFLAGS=$CFLAGS CC="$TARGET_CC" CXX="$TARGET_CXX" ../gdb-$GDBv/configure \
+        --host=$TARGET \
+        --target=$TARGET \
+        --with-system-zlib \
+        --without-guile \
+        --disable-libada \
+        --enable-gdbserver
     make $PARALLEL_MAKE
     strip_debug ./gdb/gdb
     strip_debug ./gdb/gdbserver/gdbserver
@@ -678,13 +857,13 @@ gdb_build() {
 }
 
 
-options="ha:t:l:ivd"
+options="ho:a:t:l:id"
 if (! getopts $options opt); then usage; fi
 
 while getopts $options opt; do
     case $opt in
     i   ) export MAKE_INSTALL=true;;
-    v   ) export VERBOSE=$OPTARG;;
+    o   ) export TOOLS_BIN_DIR=$OPTARG;;
     d   ) export CREATE_DEB=true;;
     a   ) case $OPTARG in
             armel   )
@@ -726,14 +905,6 @@ while getopts $options opt; do
         init $PREFIX_TARCH;;
     l   ) for lib in $OPTARG; do
             case $lib in
-                agent      )  
-                    zlib_build
-                    openssl_build $PREFIX_TARCH
-                    libevent_build
-                    libtasn1_build
-                    libpcap_build
-                    export TOOLS_NAME="${PREFIX_TARCH}-${lib}-libs"
-                    ;;
                 openssl    )  openssl_build $PREFIX_TARCH ;;
                 zlib       )  zlib_build ;;
                 libtasn1   )  libtasn1_build ;;
@@ -773,24 +944,30 @@ done
 cd ..
 
 if [[ -e $CREATE_DEB ]]; then
-	print_info "Start create deb package"
-	apt-get -y install md5deep fakeroot
-	rm -rf $DEB_PACK/DEBIAN
-	rm -rf $DEB_PACK/usr/share
-	mkdir -p $DEB_PACK/DEBIAN
-	TOOL_DIR=$(echo $DEB_PACK|sed -e "s|$(pwd)/||")
-	# NAME=$(echo $TOOL_DIR|sed 's/_/-/g')
-	echo "Package: $TOOLS_NAME" >> $DEB_PACK/DEBIAN/control
-	echo "Version: ${DEBv}" >> $DEB_PACK/DEBIAN/control
-	echo "Architecture: ${DEB_ARCH}" >> $DEB_PACK/DEBIAN/control
-	echo "Maintainer: Admin" >> $DEB_PACK/DEBIAN/control
-	echo "Priority: optional" >> $DEB_PACK/DEBIAN/control
-	echo "Installed-Size: $(du -s $DEB_PACK/usr|awk '{print $1}')" >> $DEB_PACK/DEBIAN/control
-	echo "Section: devel" >> $DEB_PACK/DEBIAN/control
-	echo "Depends: make, autoconf, libtool" >> $DEB_PACK/DEBIAN/control
-	echo -e $DEB_DESC >> $DEB_PACK/DEBIAN/control
+    print_info "Start create deb package"
+    apt-get -y install md5deep fakeroot
+    rm -rf $DEB_PACK/DEBIAN
+    rm -rf $DEB_PACK/usr/share
+    mkdir -p $DEB_PACK/DEBIAN
+    TOOL_DIR=$(echo $DEB_PACK|sed -e "s|$(pwd)/||")
+    # NAME=$(echo $TOOL_DIR|sed 's/_/-/g')
+    echo "Package: $TOOLS_NAME" >> $DEB_PACK/DEBIAN/control
+    echo "Version: ${DEBv}" >> $DEB_PACK/DEBIAN/control
+    echo "Architecture: ${DEB_ARCH}" >> $DEB_PACK/DEBIAN/control
+    echo "Maintainer: Admin" >> $DEB_PACK/DEBIAN/control
+    echo "Priority: optional" >> $DEB_PACK/DEBIAN/control
+    echo "Installed-Size: $(du -s $DEB_PACK/usr|awk '{print $1}')" >> $DEB_PACK/DEBIAN/control
+    echo "Section: devel" >> $DEB_PACK/DEBIAN/control
+    echo "Depends: make, autoconf, libtool" >> $DEB_PACK/DEBIAN/control
+    echo -e $DEB_DESC >> $DEB_PACK/DEBIAN/control
 
-	md5deep -l -o f -r $DEB_PACK/usr > $DEB_PACK/DEBIAN/md5sums
-	fakeroot dpkg-deb --build $TOOL_DIR
-	print_success "Tools was packed into the deb package $TOOL_DIR.deb"
+    md5deep -l -o f -r $DEB_PACK/usr > $DEB_PACK/DEBIAN/md5sums
+    fakeroot dpkg-deb --build $TOOL_DIR
+    print_success "Tools was packed into the deb package $TOOL_DIR.deb"
 fi
+
+print_info "Remove unneeded files"
+apt-get autoremove -y --purge md5deep fakeroot libfile-dircompare-perl gcc g++
+apt-get autoclean -y
+apt-get clean -y
+rm -rf /tmp/* && rm -rf /var/cache/*
