@@ -220,7 +220,7 @@ trap 'restore_output' EXIT
 
 # Versions
 export ZLIBv=1.2.11
-export OPENSSLv=1.0.2k
+export OPENSSLv=1.1.1
 export LIBEVENTv=2.1.8-stable
 export LIBPCAPv=1.8.1
 export FLEXv=2.6.4
@@ -233,7 +233,7 @@ export BEECRYPTv=4.1.2
 export LDBv=6.2.23.NC
 export CURLv=7.53.1
 export WGETv=1.19
-export TORv=0.3.0.8
+export TORv=0.3.4.9
 export SSHv=7.4p1
 export DROPBEARv=2017.75
 export PYTHON2v=2.7.13
@@ -635,7 +635,37 @@ curl_build() {
     download $CURL_LINK
     print_info "Compile libCURL. Please check that you have installed zLib and OpenSSL"
     mkdir curl-$CURLv-build && cd curl-$CURLv-build
-    LIBS="-ldl" CFLAGS="-s -static -O2 -fPIC -I$PREFIX/include" CPPFLAGS="-DCURL_STATICLIB" LDFLAGS="-Wl,-static -s -L$PREFIX/lib" CC=$TARGET_CC ../curl-$CURLv/configure --host=$TARGET --target=$TARGET --prefix=$PREFIX --disable-rt --enable-http --enable-cookies --disable-ipv6 --disable-ftp --disable-ldap --disable-ldaps --disable-rtsp --with-proxy --disable-dict --disable-telnet --disable-tftp --disable-pop3 --disable-imap --disable-smb --disable-smtp --disable-gopher --disable-pthreads --disable-crypto-auth --disable-sspi --disable-shared --enable-static --disable-debug --disable-curldebug --with-zlib --with-ssl=$PREFIX --without-axtls
+    LIBS="-ldl" CFLAGS="-s -static -O2 -fPIC -I$PREFIX/include" CPPFLAGS="-DCURL_STATICLIB" LDFLAGS="-Wl,-static -s -L$PREFIX/lib" CC=$TARGET_CC ../curl-$CURLv/configure \
+        --host=$TARGET \
+        --target=$TARGET \
+        --prefix=$PREFIX \
+        --disable-rt \
+        --enable-http \
+        --enable-cookies \
+        --disable-ipv6 \
+        --disable-ftp \
+        --disable-ldap \
+        --disable-ldaps \
+        --disable-rtsp \
+        --with-proxy \
+        --disable-dict \
+        --disable-telnet \
+        --disable-tftp \
+        --disable-pop3 \
+        --disable-imap \
+        --disable-smb \
+        --disable-smtp \
+        --disable-gopher \
+        --disable-pthreads \
+        --disable-crypto-auth \
+        --disable-sspi \
+        --disable-shared \
+        --enable-static \
+        --disable-debug \
+        --disable-curldebug \
+        --with-zlib \
+        --with-ssl=$PREFIX \
+        --without-axtls
     make $PARALLEL_MAKE
     strip_debug src/curl
     if [[ -e $CREATE_DEB ]]; then
@@ -680,7 +710,17 @@ tor_build() {
     download $TOR_LINK
     print_info "Compile Tor"
     mkdir tor-$TORv-build && cd tor-$TORv-build
-    LIBS="-lcrypto -ldl" LDFLAGS="-s -static -L$PREFIX/lib" CFLAGS="-static -s -O2 -I$PREFIX/include" CC="$TARGET_CC" ../tor-$TORv/configure --host=$TARGET --disable-gcc-hardening --prefix=$PREFIX --enable-static-openssl --enable-static-zlib --enable-static-tor --enable-static-libevent --with-libevent-dir=$PREFIX --with-zlib-dir=$PREFIX --with-openssl-dir=$PREFIX
+    LIBS="-lssl -lcrypto -ldl -lpthread" LDFLAGS="-s -static -L$PREFIX/lib" CFLAGS="-static -s -O2 -I$PREFIX/include" CC="$TARGET_CC" ../tor-$TORv/configure \
+        --host=$TARGET \
+        --disable-gcc-hardening \
+        --prefix=$PREFIX \
+        --enable-static-openssl \
+        --enable-static-zlib \
+        --enable-static-tor \
+        --enable-static-libevent \
+        --with-libevent-dir=$PREFIX \
+        --with-zlib-dir=$PREFIX \
+        --with-openssl-dir=$PREFIX
     make $PARALLEL_MAKE
     strip_debug ./src/or/tor
     cp ./src/or/tor $TOOLS_BIN_DIR/tor_${DEB_TARGET}
@@ -836,7 +876,7 @@ joe_build() {
 
 gdb_build() {
     download $GDB_LINK
-    apt-get install gcc g++
+    apt-get install -y gcc g++
     print_info "Compile gdb"
     mkdir gdb-$GDBv-build && cd gdb-$GDBv-build
     sed -i 's/*argp ==/*argp[0] ==/' ../gdb-$GDBv/gdb/location.c
@@ -883,7 +923,7 @@ while getopts $options opt; do
                 export SSL_MARCH=mips1
                 ;;
             mips    )
-                export TARGET=mips-linux
+                export TARGET=mips-linux-gnu
                 export SSL_ARCH=linux-mips32
                 export SSL_MARCH=mips1
                 ;;
