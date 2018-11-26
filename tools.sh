@@ -880,7 +880,7 @@ gdb_build() {
     print_info "Compile gdb"
     mkdir gdb-$GDBv-build && cd gdb-$GDBv-build
     sed -i 's/*argp ==/*argp[0] ==/' ../gdb-$GDBv/gdb/location.c
-    for x in $(grep -rl "RDYNAMIC=[\'\"]-Wl.*[\'\"]" ../gdb-7.12/); do sed -i "s|RDYNAMIC=[\'\"]-Wl.*[\'\"]|RDYNAMIC=\"\"|g" $x; done
+    for x in $(grep -rl "RDYNAMIC=[\'\"]-Wl.*[\'\"]" ../gdb-$GDBv/); do sed -i "s|RDYNAMIC=[\'\"]-Wl.*[\'\"]|RDYNAMIC=\"\"|g" $x; done
     LDFLAGS="-s -static -L$PREFIX/lib" CFLAGS="-s -static -O2 -I$PREFIX/include" CXXFLAGS=$CFLAGS CC="$TARGET_CC" CXX="$TARGET_CXX" ../gdb-$GDBv/configure \
         --host=$TARGET \
         --target=$TARGET \
