@@ -297,7 +297,7 @@ zlib_build() {
     download $ZLIB_LINK
     print_info "Compile zlib"
     cd zlib-$ZLIBv
-    CFLAGS="-static -s" CC="$TARGET_CC" ./configure \
+    CFLAGS="-static -s -O2" CC="$TARGET_CC" ./configure \
         --prefix=$PREFIX \
         --static
     make $PARALLEL_MAKE
@@ -710,7 +710,7 @@ tor_build() {
     download $TOR_LINK
     print_info "Compile Tor"
     mkdir tor-$TORv-build && cd tor-$TORv-build
-    LIBS="-lssl -lcrypto -ldl -lpthread" LDFLAGS="-s -static -L$PREFIX/lib" CFLAGS="-static -s -O2 -I$PREFIX/include" CC="$TARGET_CC" ../tor-$TORv/configure \
+    LIBS="-lssl -lcrypto -ldl -lpthread" LDFLAGS="-s -static -O2 -L$PREFIX/lib" CFLAGS="-static -s -O2 -I$PREFIX/include" CC="$TARGET_CC" ../tor-$TORv/configure \
         --host=$TARGET \
         --disable-gcc-hardening \
         --prefix=$PREFIX \

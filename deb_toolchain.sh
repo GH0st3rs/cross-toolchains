@@ -267,7 +267,13 @@ cd ..
 if ! grep -Fxq "binutils" $RESULT_FILE; then
     print_info "Compile binutils"
     mkdir binutils-$BINUTILSv-build && cd binutils-$BINUTILSv-build
-    CFLAGS="-s -static -O2" ../binutils-$BINUTILSv/configure --prefix=$USR --target=$TARGET --disable-multilib --disable-werror --program-prefix=$TARGET- --disable-doc
+    CFLAGS="-s -static -O2" ../binutils-$BINUTILSv/configure \
+        --prefix=$USR \
+        --target=$TARGET \
+        --disable-multilib \
+        --disable-werror \
+        --program-prefix=$TARGET- \
+        --disable-doc
     make $PARALLEL_MAKE configure-host
     make LDFLAGS="-all-static" $PARALLEL_MAKE
     make DESTDIR=$DEB_PACK install-strip
@@ -307,7 +313,20 @@ fi
 if ! grep -Fxq "gcc_simple" $RESULT_FILE; then
     print_info "Compile GCC without libc"
     mkdir gcc-$GCCv-build && cd gcc-$GCCv-build
-    CFLAGS="-static" ../gcc-$GCCv/configure --disable-shared --prefix=$USR --target=$TARGET --enable-languages=c,c++ --disable-multilib --disable-threads --libdir=$USR/lib --libexecdir=$USR/lib --includedir=$PREFIX/include --enable-version-specific-runtime-libs --with-gxx-include-dir=$PREFIX/c++/include --disable-doc $GCC_PARAMS
+    CFLAGS="-s -static -O2" CXXFLAGS=$CFLAGS ../gcc-$GCCv/configure \
+        --disable-shared \
+        --prefix=$USR \
+        --target=$TARGET \
+        --enable-languages=c,c++ \
+        --disable-multilib \
+        --disable-threads \
+        --libdir=$USR/lib \
+        --libexecdir=$USR/lib \
+        --includedir=$PREFIX/include \
+        --enable-version-specific-runtime-libs \
+        --with-gxx-include-dir=$PREFIX/c++/include \
+        --disable-doc \
+        $GCC_PARAMS
     make $PARALLEL_MAKE all-gcc
     make DESTDIR=$DEB_PACK install-gcc
     make install-gcc
@@ -321,7 +340,15 @@ fi
 if ! grep -Fxq "libc_basic" $RESULT_FILE; then
     print_info "Compile basic libc"
     mkdir glibc-$GLIBCv-build && cd glibc-$GLIBCv-build
-    CC="$TARGET_CC" ../glibc-$GLIBCv/configure --prefix=$PREFIX --build=$MACHTYPE --host=$TARGET --target=$TARGET --with-headers=$PREFIX/include --disable-multilib libc_cv_forced_unwind=yes libc_cv_ssp=no
+    CC="$TARGET_CC" ../glibc-$GLIBCv/configure \
+        --prefix=$PREFIX \
+        --build=$MACHTYPE \
+        --host=$TARGET \
+        --target=$TARGET \
+        --with-headers=$PREFIX/include \
+        --disable-multilib \
+        libc_cv_forced_unwind=yes \
+        libc_cv_ssp=no
     make install-bootstrap-headers=yes install-headers DESTDIR=$DEB_PACK
     make install-bootstrap-headers=yes install-headers
     make $PARALLEL_MAKE csu/subdir_lib CC="$TARGET_CC"
