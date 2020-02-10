@@ -59,25 +59,30 @@ rm -rf $LOG_FILE $ERROR_FILE 2>/dev/null
 trap 'previous_command=$this_command; this_command=$BASH_COMMAND' DEBUG
 
 redirect_output() {
+    # Save stdout
+    exec 3>&1
+    # Set output log files
+    exec 1>>$LOG_FILE
     if [ -f /.dockerenv ]; then
         return
     else
+        # Save stderr
+        exec 4>&2
         exec 2>>$ERROR_FILE
     fi
-    # Save stdout and stderr
-    exec 3>&1 4>&2
-    # Set output log files
-    exec 1>>$LOG_FILE
 }
 
 restore_output() {
+    # Restore original stdout
+    exec 1>&3
+    # Close the unused descriptors
+    exec 3>&-
     if [ -f /.dockerenv ]; then
         return
     else
-        # Restore original stdout/stderr
-        exec 1>&3 2>&4
+        exec 2>&4
         # Close the unused descriptors
-        exec 3>&- 4>&-
+        exec 4>&-
     fi
 }
 
@@ -200,7 +205,7 @@ if [[ $KERNELv > 2.5 ]] && [[ $KERNELv < 2.6 ]]; then export KERNEL_GEN=v2.5; fi
 if [[ $KERNELv > 2.4 ]] && [[ $KERNELv < 2.5 ]]; then export KERNEL_GEN=v2.4; fi
 if [[ $KERNELv > 2.3 ]] && [[ $KERNELv < 2.4 ]]; then export KERNEL_GEN=v2.3; fi
 
-
+redirect_output
 print_info "Update apt-get"
 apt-get update && apt-get -y upgrade
 apt-get install -y g++ make gawk autoconf libtool bison wget texinfo
@@ -303,6 +308,8 @@ fi
 if ! grep -Fxq "gcc_simple" $RESULT_FILE; then
     print_info "Compile GCC without libc"
     mkdir gcc-$GCCv-build && cd gcc-$GCCv-build
+    # Fix bug https://www.mail-archive.com/gcc-bugs@gcc.gnu.org/msg549392.html
+    sed -i "s|#include <stdint.h>|#include <stdint.h>\n#include <linux/limits.h>|" ../gcc-$GCCv/libmpx/mpxrt/mpxrt-utils.h
     CFLAGS="-s -static -O2" CXXFLAGS=$CFLAGS ../gcc-$GCCv/configure \
         --disable-shared \
         --prefix=$USR \

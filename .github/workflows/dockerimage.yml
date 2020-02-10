@@ -23,7 +23,7 @@ jobs:
     - name: ARM Little Endian x32
       if: success()
       run: docker build . --build-arg ARCH=armel -t armel-linux-gnu:$(date +%s) --file Dockerfile
-      
+
     - name: ARM Big Endian x32
       if: success()
       run: docker build . --build-arg ARCH=armbe -t armbe-linux-gnu:$(date +%s) --file Dockerfile
@@ -33,14 +33,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
-    - name: i686 Little Endian
-      if: success()
-      run: docker build . --build-arg ARCH=i686 -t i686-linux-gnu:$(date +%s) --file Dockerfile
-      
     - name: PowerPC Big Endian x32
       if: success()
       run: docker build . --build-arg ARCH=powerpc -t powerpc-linux-gnu:$(date +%s) --file Dockerfile
-      
+
     - name: TileGX Little Endian x32
       if: success()
       run: docker build . --build-arg ARCH=tilegx -t tilegx-linux-gnu:$(date +%s) --file Dockerfile
+
+    - name: i686 Little Endian
+      if: success()
+      run: docker build . --build-arg ARCH=i686 -t i686-linux-gnu:$(date +%s) --file Dockerfile
