@@ -1,0 +1,32 @@
+name: Docker Image CI
+
+on: [push]
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: MIPS Little Endian x32
+      run: docker build . --build-arg ARCH=mipsel -t mipsel-linux-gnu:$(date +%s) --file Dockerfile
+      
+    - name: MIPS Big Endian x32
+      run: docker build . --build-arg ARCH=mips -t mips-linux-gnu:$(date +%s) --file Dockerfile
+      
+    - name: ARM Little Endian x32
+      run: docker build . --build-arg ARCH=armel -t armel-linux-gnu:$(date +%s) --file Dockerfile
+      
+    - name: ARM Big Endian x32
+      run: docker build . --build-arg ARCH=armbe -t armbe-linux-gnu:$(date +%s) --file Dockerfile
+      
+    - name: i686 Little Endian
+      run: docker build . --build-arg ARCH=i686 -t i686-linux-gnu:$(date +%s) --file Dockerfile
+      
+    - name: PowerPC Big Endian x32
+      run: docker build . --build-arg ARCH=powerpc -t powerpc-linux-gnu:$(date +%s) --file Dockerfile
+      
+    - name: TileGX Little Endian x32
+      run: docker build . --build-arg ARCH=tilegx -t tilegx-linux-gnu:$(date +%s) --file Dockerfile
