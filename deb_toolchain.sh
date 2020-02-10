@@ -46,15 +46,14 @@ else
 fi
 
 if [ -f /.dockerenv ]; then
-    LOG_FILE=""
     ERROR_FILE=""
 else
-    LOG_FILE=$(pwd)/$1-output.log
     ERROR_FILE=$(pwd)/$1-error.log
 fi
+LOG_FILE=$(pwd)/$1-output.log
 RESULT_FILE=$(pwd)/$1-result.log
 # Clear logs
-rm -rf $LOG_FILE $ERROR_FILE
+rm -rf $LOG_FILE $ERROR_FILE 2>/dev/null
 
 # Set script params
 trap 'previous_command=$this_command; this_command=$BASH_COMMAND' DEBUG
@@ -63,12 +62,12 @@ redirect_output() {
     if [ -f /.dockerenv ]; then
         return
     else
-        # Save stdout and stderr
-        exec 3>&1 4>&2
-        # Set output log files
         exec 2>>$ERROR_FILE
-        exec 1>>$LOG_FILE
     fi
+    # Save stdout and stderr
+    exec 3>&1 4>&2
+    # Set output log files
+    exec 1>>$LOG_FILE
 }
 
 restore_output() {
@@ -127,7 +126,7 @@ err_report() {
 }
 
 
-USAGE="Usage: $0 [mipsel|mips|armel|armv4l|armbe|i686|powerpc|tilegx]"
+USAGE="Usage: $0 [mipsel|mips|armel|armbe|i686|powerpc|tilegx]"
 if [[ $1 == mipsel ]]; then
     export TARGET=mipsel-linux-gnu
     export KERNEL_ARCH=mips
@@ -137,9 +136,6 @@ elif [[ $1 == mips ]]; then
 elif [[ $1 == armel ]]; then
     export TARGET=arm-linux-gnueabi
     export KERNEL_ARCH=arm
-elif [[ $1 == armv4l ]]; then
-    export TARGET=armv4l-unknown-linux
-    export KERNEL_ARCH=armv4
 elif [[ $1 == armbe ]]; then
     export TARGET=armbe-linux-gnueabi
     export CPPFLAGS_FOR_TARGET="-mbig-endian"
@@ -152,12 +148,6 @@ elif [[ $1 == i686 ]]; then
 elif [[ $1 == powerpc ]]; then
     export TARGET=powerpc-linux-gnu
     export KERNEL_ARCH=powerpc
-elif [[ $1 == r3000 ]]; then
-    export TARGET=mips-linux-gnu
-    export KERNEL_ARCH=mips
-    export CPPFLAGS_FOR_TARGET="-march=r3000"
-    export CFLAGS_FOR_TARGET="-march=r3000"
-    export GCC_PARAMS="--with-arch=r3000"
 elif [[ $1 == tilegx ]]; then
     export TARGET=tilegx-linux-gnu
     export KERNEL_ARCH=tilegx

@@ -4,6 +4,8 @@ ARG ARCH=mipsel
 
 WORKDIR /tmp
 
+RUN apt-get update && apt-get -y upgrade && apt-get install -y g++ make gawk autoconf libtool bison wget texinfo
+
 ADD deb_toolchain.sh /tmp/deb_toolchain.sh
 RUN /tmp/deb_toolchain.sh ${ARCH}
 

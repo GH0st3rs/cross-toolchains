@@ -191,7 +191,7 @@ init() {
 usage() {
     restore_output
 cat << EOF
-usage: args.py [-h] -a ARCH [-t TOOLS] [-l LIBS] [-i] [-v]
+usage: args.py [-h] -a ARCH [-t TOOLS] [-l LIBS] [-i] [-v] [-d] [-o DIR]
 
 optional arguments:
   -h, --help      Show this help message and exit
@@ -202,7 +202,7 @@ optional arguments:
                   agent - ${LIBS[@]::6}
                   $(echo ${LIBS[*]}|sed 's/ /\n                  /g')
   -i              Run "make install" for selected tools
-  -o              Binary output directory
+  -o DIR          Binary output directory
   -d              Create DEB package
 EOF
     redirect_output
