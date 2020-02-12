@@ -150,7 +150,7 @@ elif [[ ${BUILD_ARCH} == armbe ]]; then
     export GCC_PARAMS="--with-endian=big"
     export KERNEL_ARCH=arm
 elif [[ ${BUILD_ARCH} == i686 ]]; then
-    export TARGET=i686-pc-linux-gnu
+    export TARGET=i686-linux-gnu
     export KERNEL_ARCH=x86
 elif [[ ${BUILD_ARCH} == powerpc ]]; then
     export TARGET=powerpc-linux-gnu

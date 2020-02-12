@@ -1,5 +1,7 @@
 #!/bin/bash
 
+BUILD_ARCH=$1
+
 # Set colors
 if [ -f /.dockerenv ]; then
     # Regular
@@ -46,13 +48,12 @@ else
 fi
 
 if [ -f /.dockerenv ]; then
-    LOG_FILE=""
     ERROR_FILE=""
 else
-    LOG_FILE=$(pwd)/$1-output.log
-    ERROR_FILE=$(pwd)/$1-error.log
+    ERROR_FILE=$(pwd)/${BUILD_ARCH}-error.log
 fi
-RESULT_FILE=$(pwd)/$1-result.log
+LOG_FILE=$(pwd)/${BUILD_ARCH}-output.log
+RESULT_FILE=$(pwd)/${BUILD_ARCH}-result.log
 # Clear logs
 rm -rf $LOG_FILE $ERROR_FILE
 
@@ -60,25 +61,30 @@ rm -rf $LOG_FILE $ERROR_FILE
 trap 'previous_command=$this_command; this_command=$BASH_COMMAND' DEBUG
 
 redirect_output() {
+    # Save stdout
+    exec 3>&1
+    # Set output log files
+    exec 1>>$LOG_FILE
     if [ -f /.dockerenv ]; then
         return
     else
-        # Save stdout and stderr
-        exec 3>&1 4>&2
-        # Set output log files
+        # Save stderr
+        exec 4>&2
         exec 2>>$ERROR_FILE
-        exec 1>>$LOG_FILE
     fi
 }
 
 restore_output() {
+    # Restore original stdout
+    exec 1>&3
+    # Close the unused descriptors
+    exec 3>&-
     if [ -f /.dockerenv ]; then
         return
     else
-        # Restore original stdout/stderr
-        exec 1>&3 2>&4
+        exec 2>&4
         # Close the unused descriptors
-        exec 3>&- 4>&-
+        exec 4>&-
     fi
 }
 
@@ -162,7 +168,7 @@ init() {
     if [[ -z $TOOLS_BIN_DIR ]]; then
         export TOOLS_BIN_DIR=$(pwd)/BIN
     fi
-    if [[ $1 == x86 ]]; then
+    if [[ $1 == i686 ]]; then
         export BUILDTARGET="--build=$TARGET"
     else
         export BUILDTARGET=""
@@ -209,6 +215,7 @@ EOF
     exit 1
 }
 
+redirect_output
 print_info "Update apt-get"
 apt-get update && apt-get -y upgrade
 apt-get install -y make gawk wget
@@ -270,7 +277,7 @@ export EMPTY_LINK=https://downloads.sourceforge.net/project/empty/empty/empty-$E
 export GDB_LINK=https://ftp.gnu.org/gnu/gdb/gdb-$GDBv.tar.gz
 
 
-ARCHS=(armel armbe mipsel mips x86 powerpc tile)
+ARCHS=(armel armbe mipsel mips i686 powerpc tile)
 TOOLS=(wget tor ssh dropbear python2 python3 rpm e2tools empty joe gdb)
 LIBS=(zlib openssl libtasn1 libevent libpcap flex libmagic e2fsprogs libdb curl)
 redirect_output
@@ -316,7 +323,7 @@ openssl_build() {
     print_info "Compile OpenSSL"
     apt-get install -y libfile-dircompare-perl
     cd openssl-$OPENSSLv
-    if [[ $1 == x86 ]]; then
+    if [[ $1 == i686 ]]; then
         LDFLAGS="-static -s" CFLAGS=" -static -s -O2" CC="$TARGET_CC" ./config --prefix=$PREFIX no-shared --openssldir=$PREFIX
     elif [[ $1 == powerpc ]]; then
         LDFLAGS="-static -s" CFLAGS=" -static -s -O2" CC="$TARGET_CC" ./Configure $SSL_ARCH --prefix=$PREFIX no-shared --openssldir=$PREFIX -fPIC -I$PREFIX/include -L$PREFIX/lib
@@ -327,7 +334,7 @@ openssl_build() {
     make install
     if [[ -e $CREATE_DEB ]]; then
         # Create DEB
-        if [[ $1 == x86 ]]; then
+        if [[ $1 == i686 ]]; then
             LDFLAGS="-static -s" CFLAGS=" -static -s -O2" CC="$TARGET_CC" ./config --prefix=$DEB_PACK/$PREFIX no-shared --openssldir=$DEB_PACK/$PREFIX
         elif [[ $1 == powerpc ]]; then
             LDFLAGS="-static -s" CFLAGS=" -static -s -O2" CC="$TARGET_CC" ./Configure $SSL_ARCH --prefix=$DEB_PACK/$PREFIX no-shared --openssldir=$DEB_PACK/$PREFIX -fPIC -I$PREFIX/include -L$PREFIX/lib
@@ -413,7 +420,7 @@ flex_build() {
     make $PARALLEL_MAKE
     make install-strip
     make DESTDIR=$DEB_PACK install-strip
-    if [[ $1 != x86 ]] || [[ $1 != i686 ]]; then
+    if [[ $1 != i686 ]] || [[ $1 != i686 ]]; then
         rm -rf $PREFIX/bin/flex*
         if [[ $(uname -m) == x86_64 ]]; then
             LDFLAGS="-static -s" CFLAGS="-static -O2 -s" CXXFLAGS=$CFLAGS CC=gcc ../flex-$FLEXv/configure --prefix=$PREFIX --enable-static --disable-libfl CFLAGS_FOR_BUILD="-s -O2 -m32"
@@ -931,7 +938,7 @@ while getopts $options opt; do
                 export TARGET=powerpc-linux-gnu
                 export SSL_ARCH=linux-ppc
                 ;;
-            x86     )
+            i686     )
                 export TARGET=i686-linux-gnu
                 export SSL_ARCH=linux-elf
                 ;;
