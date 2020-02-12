@@ -1,5 +1,7 @@
 #!/bin/bash
 
+BUILD_ARCH=$1
+
 # Set colors
 if [ -f /.dockerenv ]; then
     # Regular
@@ -48,10 +50,10 @@ fi
 if [ -f /.dockerenv ]; then
     ERROR_FILE=""
 else
-    ERROR_FILE=$(pwd)/$1-error.log
+    ERROR_FILE=$(pwd)/${BUILD_ARCH}-error.log
 fi
-LOG_FILE=$(pwd)/$1-output.log
-RESULT_FILE=$(pwd)/$1-result.log
+LOG_FILE=$(pwd)/${BUILD_ARCH}-output.log
+RESULT_FILE=$(pwd)/${BUILD_ARCH}-result.log
 # Clear logs
 rm -rf $LOG_FILE $ERROR_FILE 2>/dev/null
 
@@ -131,33 +133,33 @@ err_report() {
 }
 
 
-USAGE="Usage: $0 [mipsel|mips|armel|armbe|i686|powerpc|tilegx]"
-if [[ $1 == mipsel ]]; then
+USAGE="Usage: $0 [mipsel|mips|armel|armbe|i686|powerpc]"
+if [[ ${BUILD_ARCH} == mipsel ]]; then
     export TARGET=mipsel-linux-gnu
     export KERNEL_ARCH=mips
-elif [[ $1 == mips ]]; then
+elif [[ ${BUILD_ARCH} == mips ]]; then
     export TARGET=mips-linux-gnu
     export KERNEL_ARCH=mips
-elif [[ $1 == armel ]]; then
+elif [[ ${BUILD_ARCH} == armel ]]; then
     export TARGET=arm-linux-gnueabi
     export KERNEL_ARCH=arm
-elif [[ $1 == armbe ]]; then
+elif [[ ${BUILD_ARCH} == armbe ]]; then
     export TARGET=armbe-linux-gnueabi
     export CPPFLAGS_FOR_TARGET="-mbig-endian"
     export CFLAGS_FOR_TARGET="-mbig-endian"
     export GCC_PARAMS="--with-endian=big"
     export KERNEL_ARCH=arm
-elif [[ $1 == i686 ]]; then
+elif [[ ${BUILD_ARCH} == i686 ]]; then
     export TARGET=i686-pc-linux-gnu
     export KERNEL_ARCH=x86
-elif [[ $1 == powerpc ]]; then
+elif [[ ${BUILD_ARCH} == powerpc ]]; then
     export TARGET=powerpc-linux-gnu
     export KERNEL_ARCH=powerpc
-elif [[ $1 == tilegx ]]; then
+elif [[ ${BUILD_ARCH} == tilegx ]]; then
     export TARGET=tilegx-linux-gnu
-    export KERNEL_ARCH=tilegx
+    export KERNEL_ARCH=tile
     export GCC_PARAMS="--disable-libssp"
-    export CFLAGS_FOR_TARGET="-m32"
+    export CFLAGS_FOR_TARGET="-m32 -mcpu=tilegx"
     export CPPFLAGS_FOR_TARGET=$CFLAGS_FOR_TARGET
 else
     echo $USAGE
@@ -185,14 +187,14 @@ export KERNELv=3.1 #2.6.38.8
 export USR=$TOOLCHAIN_DIR
 export PREFIX=$USR/$TARGET
 export PATH=$PATH:$PREFIX/bin:$USR/bin
-export PARALLEL_MAKE=-j3
+export PARALLEL_MAKE=-j4
 if [[ $(uname -m) == x86_64 ]]; then
     export DEB_ARCH=amd64
 else
     export DEB_ARCH=i386
 fi
 export DEBv=1.0
-export DEB_TARGET=$1 #$(echo $TARGET|tr '-' ' '|awk '{print $1}')
+export DEB_TARGET=$(echo $TARGET|tr '-' ' '|awk '{print $1}')
 export DEB_PACK=$(pwd)/${DEB_TARGET}_toolchain_v${DEBv}_${DEB_ARCH}
 export TMP_BUILD_DIR=$(pwd)/$DEB_TARGET-cross
 
@@ -285,19 +287,19 @@ if ! grep -Fxq "headers" $RESULT_FILE; then
     cd linux-$KERNELv
     make ARCH=$KERNEL_ARCH INSTALL_HDR_PATH=$PREFIX headers_install
     make ARCH=$KERNEL_ARCH INSTALL_HDR_PATH=$DEB_PACK/$PREFIX headers_install
-    if [[ $KERNELv > 3 ]] && [[ $KERNELv < 3.2 ]] && [[ $KERNEL_ARCH == tilegx ]]; then
-        wget -q -c http://www.mellanox.com/repository/solutions/tile-scm/opcode.tar.bz2 -O /tmp/opcode.tar.bz2
-        tar -C /tmp -xf /tmp/opcode.tar.bz2
-        if [[ ! -d $PREFIX/include/arch ]]; then
-            mkdir $PREFIX/include/arch
-        fi
-        cp -r /tmp/usr/* $PREFIX/
-        cp ./arch/tile/include/arch/*.h $PREFIX/include/arch/
-        if ! grep -Fq __uint_reg_t $PREFIX/include/arch/abi.h; then
-            sed -i 's|\(f __ASSEMBLER__\)|\1\ntypedef unsigned long long __uint_reg_t;\ntypedef long long __int_reg_t;|g' $PREFIX/include/arch/abi.h
-        fi
-        cp -r $PREFIX/include/arch $DEB_PACK/$PREFIX/include/
-    fi
+    # if [[ $KERNELv > 3 ]] && [[ $KERNELv < 3.2 ]] && [[ $KERNEL_ARCH == tilegx ]]; then
+    #     wget -q -c http://www.mellanox.com/repository/solutions/tile-scm/opcode.tar.bz2 -O /tmp/opcode.tar.bz2
+    #     tar -C /tmp -xf /tmp/opcode.tar.bz2
+    #     if [[ ! -d $PREFIX/include/arch ]]; then
+    #         mkdir $PREFIX/include/arch
+    #     fi
+    #     cp -r /tmp/usr/* $PREFIX/
+    #     cp ./arch/tile/include/arch/*.h $PREFIX/include/arch/
+    #     if ! grep -Fq __uint_reg_t $PREFIX/include/arch/abi.h; then
+    #         sed -i 's|\(f __ASSEMBLER__\)|\1\ntypedef unsigned long long __uint_reg_t;\ntypedef long long __int_reg_t;|g' $PREFIX/include/arch/abi.h
+    #     fi
+    #     cp -r $PREFIX/include/arch $DEB_PACK/$PREFIX/include/
+    # fi
     cd ..
     echo "headers" >> $RESULT_FILE
 else

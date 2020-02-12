@@ -37,10 +37,6 @@ jobs:
       if: success()
       run: docker build . --build-arg ARCH=powerpc -t powerpc-linux-gnu:$(date +%s) --file Dockerfile
 
-    - name: TileGX Little Endian x32
-      if: success()
-      run: docker build . --build-arg ARCH=tilegx -t tilegx-linux-gnu:$(date +%s) --file Dockerfile
-
     - name: i686 Little Endian
       if: success()
       run: docker build . --build-arg ARCH=i686 -t i686-linux-gnu:$(date +%s) --file Dockerfile

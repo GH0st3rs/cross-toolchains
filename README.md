@@ -20,6 +20,3 @@ Script for build cross-toolchain for ARMEL, ARMBE, MIPSEL, MIPS, PowerPC, TileGX
 
 ### PowerPC Big Endian x32
 ```docker build --build-arg ARCH=powerpc -t powerpc-linux-gnu .```
-
-### TileGX Little Endian x32
-```docker build --build-arg ARCH=tilegx -t tilegx-linux-gnu .```
