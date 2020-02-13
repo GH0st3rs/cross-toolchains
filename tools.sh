@@ -1,7 +1,5 @@
 #!/bin/bash
 
-BUILD_ARCH=$1
-
 # Set colors
 if [ -f /.dockerenv ]; then
     # Regular
@@ -47,44 +45,27 @@ else
     NC="$(tput sgr 0 2>/dev/null || echo '\e[0m')" # Text Reset
 fi
 
-if [ -f /.dockerenv ]; then
-    ERROR_FILE=""
-else
-    ERROR_FILE=$(pwd)/${BUILD_ARCH}-error.log
-fi
-LOG_FILE=$(pwd)/${BUILD_ARCH}-output.log
-RESULT_FILE=$(pwd)/${BUILD_ARCH}-result.log
-# Clear logs
-rm -rf $LOG_FILE $ERROR_FILE
-
 # Set script params
+trap 'err_report $LINENO $BASH_LINENO "$BASH_COMMAND" $(printf "::%s" ${FUNCNAME[@]:-})' ERR
+trap 'restore_output' EXIT
 trap 'previous_command=$this_command; this_command=$BASH_COMMAND' DEBUG
 
 redirect_output() {
-    # Save stdout
-    exec 3>&1
-    # Set output log files
-    exec 1>>$LOG_FILE
-    if [ -f /.dockerenv ]; then
-        return
-    else
-        # Save stderr
+    if [[ -z ${VERBOSE} ]]; then
+        # Save stdout and stderr
+        exec 3>&1
         exec 4>&2
+        # Set output log files
+        exec 1>>$LOG_FILE
         exec 2>>$ERROR_FILE
     fi
 }
 
 restore_output() {
-    # Restore original stdout
-    exec 1>&3
-    # Close the unused descriptors
-    exec 3>&-
-    if [ -f /.dockerenv ]; then
-        return
-    else
-        exec 2>&4
-        # Close the unused descriptors
-        exec 4>&-
+    if [[ -z ${VERBOSE} ]]; then
+        # Restore original stdout
+        exec 1>&3 3>&- # Восстановить stdout и закрыть дескр. #3
+        exec 2>&4 4>&- # Восстановить stderr и закрыть дескр. #4
     fi
 }
 
@@ -144,7 +125,30 @@ err_report() {
     exit 1
 }
 
+init_logs() {
+    if [[ -z ${VERBOSE} ]]; then
+        ERROR_FILE=$(pwd)/error.log
+        LOG_FILE=$(pwd)/output.log
+        # Clear logs
+        rm -f $LOG_FILE $ERROR_FILE 2>/dev/null
+    else
+        ERROR_FILE=""
+        LOG_FILE=""
+    fi
+    RESULT_FILE=$(pwd)/result.log
+    redirect_output
+}
+
+upgrade_system() {
+    print_info "Update apt-get"
+    apt-get update && apt-get -y upgrade
+    apt-get install -y make gawk wget
+    apt-get -y autoremove
+}
+
 init() {
+    init_logs
+    upgrade_system
     TOOLCHAIN_DIR=/usr
     export TARGET_CC="$TARGET-gcc $CFLAGS_FOR_TARGET"
     export TARGET_CXX="$TARGET-g++ $CFLAGS_FOR_TARGET"
@@ -205,25 +209,15 @@ optional arguments:
   -t TOOLS        Compile selected tools:
                   $(echo ${TOOLS[*]}|sed 's/ /\n                  /g')
   -l LIBS         Compile selected libs:
-                  agent - ${LIBS[@]::6}
                   $(echo ${LIBS[*]}|sed 's/ /\n                  /g')
   -i              Run "make install" for selected tools
   -o DIR          Binary output directory
   -d              Create DEB package
+  -v              Verbose
 EOF
     redirect_output
     exit 1
 }
-
-redirect_output
-print_info "Update apt-get"
-apt-get update && apt-get -y upgrade
-apt-get install -y make gawk wget
-apt-get -y autoremove
-
-
-trap 'err_report $LINENO $BASH_LINENO "$BASH_COMMAND" $(printf "::%s" ${FUNCNAME[@]:-})' ERR
-trap 'restore_output' EXIT
 
 # Versions
 export ZLIBv=1.2.11
@@ -280,7 +274,7 @@ export GDB_LINK=https://ftp.gnu.org/gnu/gdb/gdb-$GDBv.tar.gz
 ARCHS=(armel armbe mipsel mips i686 powerpc tile)
 TOOLS=(wget tor ssh dropbear python2 python3 rpm e2tools empty joe gdb)
 LIBS=(zlib openssl libtasn1 libevent libpcap flex libmagic e2fsprogs libdb curl)
-redirect_output
+# redirect_output
 
 
 #####################################################################################################
@@ -324,7 +318,7 @@ openssl_build() {
     apt-get install -y libfile-dircompare-perl
     cd openssl-$OPENSSLv
     if [[ $1 == i686 ]]; then
-        LDFLAGS="-static -s" CFLAGS=" -static -s -O2" CC="$TARGET_CC" ./config --prefix=$PREFIX no-shared --openssldir=$PREFIX
+        LDFLAGS="-static -s" CFLAGS=" -static -s -O2" CC="$TARGET_CC" ./Configure $SSL_ARCH --prefix=$PREFIX no-shared --openssldir=$PREFIX -m32 -fPIC -I$PREFIX/include -L$PREFIX/lib
     elif [[ $1 == powerpc ]]; then
         LDFLAGS="-static -s" CFLAGS=" -static -s -O2" CC="$TARGET_CC" ./Configure $SSL_ARCH --prefix=$PREFIX no-shared --openssldir=$PREFIX -fPIC -I$PREFIX/include -L$PREFIX/lib
     else
@@ -335,7 +329,7 @@ openssl_build() {
     if [[ -e $CREATE_DEB ]]; then
         # Create DEB
         if [[ $1 == i686 ]]; then
-            LDFLAGS="-static -s" CFLAGS=" -static -s -O2" CC="$TARGET_CC" ./config --prefix=$DEB_PACK/$PREFIX no-shared --openssldir=$DEB_PACK/$PREFIX
+            LDFLAGS="-static -s" CFLAGS=" -static -s -O2" CC="$TARGET_CC" ./Configure $SSL_ARCH --prefix=$DEB_PACK/$PREFIX no-shared --openssldir=$PREFIX -m32 -fPIC -I$PREFIX/include -L$PREFIX/lib
         elif [[ $1 == powerpc ]]; then
             LDFLAGS="-static -s" CFLAGS=" -static -s -O2" CC="$TARGET_CC" ./Configure $SSL_ARCH --prefix=$DEB_PACK/$PREFIX no-shared --openssldir=$DEB_PACK/$PREFIX -fPIC -I$PREFIX/include -L$PREFIX/lib
         else
@@ -904,7 +898,7 @@ gdb_build() {
 }
 
 
-options="ho:a:t:l:id"
+options="ho:a:t:l:idv"
 if (! getopts $options opt); then usage; fi
 
 while getopts $options opt; do
@@ -912,6 +906,7 @@ while getopts $options opt; do
     i   ) export MAKE_INSTALL=true;;
     o   ) export TOOLS_BIN_DIR=$OPTARG;;
     d   ) export CREATE_DEB=true;;
+    v   ) export VERBOSE=true;;
     a   ) case $OPTARG in
             armel   )
                 export TARGET=arm-linux-gnueabi
@@ -940,7 +935,8 @@ while getopts $options opt; do
                 ;;
             i686     )
                 export TARGET=i686-linux-gnu
-                export SSL_ARCH=linux-elf
+                export SSL_ARCH=linux-generic32
+                # export SSL_MARCH=i386
                 ;;
             tile    )
                 export TARGET=tilegx-linux-gnu
@@ -1014,7 +1010,10 @@ if [[ -e $CREATE_DEB ]]; then
 fi
 
 print_info "Remove unneeded files"
+echo ok
 apt-get autoremove -y --purge md5deep fakeroot libfile-dircompare-perl gcc g++
 apt-get autoclean -y
 apt-get clean -y
-rm -rf /tmp/* && rm -rf /var/cache/*
+if [ -f /.dockerenv ]; then
+    rm -rf /tmp/* && rm -rf /var/cache/*
+fi
