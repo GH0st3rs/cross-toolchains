@@ -315,7 +315,7 @@ zlib_build() {
 
     # Test zlib
     echo "void main(){}" > test.c
-    $TARGET_CC test.c -lzlib -static
+    $TARGET_CC test.c -lz -static
     check_lib "zLib"
     DEB_DESC+="\n .\n zlib-$ZLIBv"
     TOOLS_NAME+="-zlib"
