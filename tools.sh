@@ -126,16 +126,17 @@ err_report() {
 }
 
 init_logs() {
+	export LOGS_DIR=$(mktemp -d)
     if [[ -z ${VERBOSE} ]]; then
-        ERROR_FILE=$(pwd)/error.log
-        LOG_FILE=$(pwd)/output.log
+        ERROR_FILE=${LOGS_DIR}/error.log
+        LOG_FILE=${LOGS_DIR}/output.log
         # Clear logs
         rm -f $LOG_FILE $ERROR_FILE 2>/dev/null
     else
         ERROR_FILE=""
         LOG_FILE=""
     fi
-    RESULT_FILE=$(pwd)/result.log
+    RESULT_FILE=${LOGS_DIR}/result.log
     redirect_output
 }
 
@@ -164,13 +165,14 @@ init() {
     # else
     #     export DEB_ARCH=i386
     # fi
+    export WORK_DIRECTORY=$(mktemp -d)
     export DEB_ARCH=all
     export DEBv=1.0
     export DEB_TARGET=$1 #$(echo $TARGET|tr '-' ' '|awk '{print $1}')
     export DEB_PACK=$(pwd)/${DEB_TARGET}_tools_v${DEBv}_${DEB_ARCH}
-    export TMP_BUILD_DIR=$(pwd)/$DEB_TARGET-cross
-    if [[ -z $TOOLS_BIN_DIR ]]; then
-        export TOOLS_BIN_DIR=$(pwd)/BIN
+    export TMP_BUILD_DIR=${WORK_DIRECTORY}/${DEB_TARGET}-cross
+    if [[ -z ${TOOLS_BIN_DIR} ]]; then
+        export TOOLS_BIN_DIR=$(mktemp -d)/BIN
     fi
     if [[ $1 == i686 ]]; then
         export BUILDTARGET="--build=$TARGET"
@@ -181,7 +183,7 @@ init() {
     export TOOLS_NAME="$DEB_TARGET"
     
     if [[ ! -d $TMP_BUILD_DIR ]]; then
-        mkdir $TMP_BUILD_DIR
+        mkdir -p $TMP_BUILD_DIR
         cd $TMP_BUILD_DIR
     else
         cd $TMP_BUILD_DIR
@@ -189,19 +191,22 @@ init() {
         ls|grep -v "\.tar\."| xargs rm -rf
     fi
     # Check BIN dir
-    if [[ ! -d $TOOLS_BIN_DIR ]]; then
-        mkdir $TOOLS_BIN_DIR
+    if [[ ! -d ${TOOLS_BIN_DIR} ]]; then
+        mkdir -p ${TOOLS_BIN_DIR}
     fi
     if [[ -d $DEB_PACK ]]; then
         rm -rf $DEB_PACK
     fi
-    mkdir -p $DEB_PACK
+    if [[ ! -z ${CREATE_DEB} ]]; then
+        mkdir -p $DEB_PACK
+    fi
 }
 
 usage() {
+    init_logs
     restore_output
 cat << EOF
-usage: args.py [-h] -a ARCH [-t TOOLS] [-l LIBS] [-i] [-v] [-d] [-o DIR]
+usage: args.py [-h] [-i] [-o DIR] [-d] [-v] -a ARCH [-l LIBS] [-t TOOLS]
 
 optional arguments:
   -h, --help      Show this help message and exit
@@ -307,6 +312,11 @@ zlib_build() {
     fi
     make install
     cd ..
+
+    # Test zlib
+    echo "void main(){}" > test.c
+    $TARGET_CC test.c -lzlib -static
+    check_lib "zLib"
     DEB_DESC+="\n .\n zlib-$ZLIBv"
     TOOLS_NAME+="-zlib"
 }
@@ -702,7 +712,8 @@ wget_build() {
         --without-ssl
     make $PARALLEL_MAKE
     strip_debug ./src/wget
-    cp ./src/wget $TOOLS_BIN_DIR/wget_${DEB_TARGET}
+    cp ./src/wget ${TOOLS_BIN_DIR}/wget_${DEB_TARGET}
+    print_info "You can find it: ${TOOLS_BIN_DIR}/"
     cd ..
 }
 
@@ -724,8 +735,9 @@ tor_build() {
         --with-openssl-dir=$PREFIX
     make $PARALLEL_MAKE
     strip_debug ./src/or/tor
-    cp ./src/or/tor $TOOLS_BIN_DIR/tor_${DEB_TARGET}
-    echo "" > $TOOLS_BIN_DIR/torrc
+    cp ./src/or/tor ${TOOLS_BIN_DIR}/tor_${DEB_TARGET}
+    echo "" > ${TOOLS_BIN_DIR}/torrc
+    print_info "You can find it: ${TOOLS_BIN_DIR}/"
     cd ..
 }
 
@@ -746,9 +758,10 @@ ssh_build() {
     strip_debug ssh
     strip_debug sshd
     strip_debug scp
-    cp ssh $TOOLS_BIN_DIR/ssh_${DEB_TARGET}
-    cp sshd $TOOLS_BIN_DIR/sshd_${DEB_TARGET}
-    cp scp $TOOLS_BIN_DIR/scp_${DEB_TARGET}
+    cp ssh ${TOOLS_BIN_DIR}/ssh_${DEB_TARGET}
+    cp sshd ${TOOLS_BIN_DIR}/sshd_${DEB_TARGET}
+    cp scp ${TOOLS_BIN_DIR}/scp_${DEB_TARGET}
+    print_info "You can find it: ${TOOLS_BIN_DIR}/"
     cd ..
 }
 
@@ -767,8 +780,9 @@ dropbear_build() {
     make $PARALLEL_MAKE
     strip_debug dropbear
     strip_debug dbclient
-    cp dropbear $TOOLS_BIN_DIR/dropbear_${DEB_TARGET}
-    cp dbclient $TOOLS_BIN_DIR/dbclient_${DEB_TARGET}
+    cp dropbear ${TOOLS_BIN_DIR}/dropbear_${DEB_TARGET}
+    cp dbclient ${TOOLS_BIN_DIR}/dbclient_${DEB_TARGET}
+    print_info "You can find it: ${TOOLS_BIN_DIR}/"
     cd ..
 }
 
@@ -870,7 +884,8 @@ joe_build() {
         --disable-termcap
     make $PARALLEL_MAKE
     strip_debug ./joe/joe
-    cp ./joe/joe $TOOLS_BIN_DIR/joe_${DEB_TARGET}
+    cp ./joe/joe ${TOOLS_BIN_DIR}/joe_${DEB_TARGET}
+    print_info "You can find it: ${TOOLS_BIN_DIR}/"
     cd ..
 }
 
@@ -892,8 +907,9 @@ gdb_build() {
     make $PARALLEL_MAKE
     strip_debug ./gdb/gdb
     strip_debug ./gdb/gdbserver/gdbserver
-    cp ./gdb/gdb $TOOLS_BIN_DIR/gdb_${DEB_TARGET}
-    cp ./gdb/gdbserver/gdbserver $TOOLS_BIN_DIR/gdbserver_${DEB_TARGET}
+    cp ./gdb/gdb ${TOOLS_BIN_DIR}/gdb_${DEB_TARGET}
+    cp ./gdb/gdbserver/gdbserver ${TOOLS_BIN_DIR}/gdbserver_${DEB_TARGET}
+    print_info "You can find it: ${TOOLS_BIN_DIR}/"
     cd ..
 }
 
@@ -1010,10 +1026,10 @@ if [[ -e $CREATE_DEB ]]; then
 fi
 
 print_info "Remove unneeded files"
-echo ok
 apt-get autoremove -y --purge md5deep fakeroot libfile-dircompare-perl gcc g++
 apt-get autoclean -y
 apt-get clean -y
 if [ -f /.dockerenv ]; then
-    rm -rf /tmp/* && rm -rf /var/cache/*
+    rm -rf /var/cache/*
+    rm -rf ${LOGS_DIR} ${WORK_DIRECTORY}
 fi

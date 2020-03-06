@@ -1,4 +1,4 @@
-FROM ubuntu:latest
+FROM ubuntu:bionic
 MAINTAINER GH0st3rs
 ARG ARCH=mipsel
 
