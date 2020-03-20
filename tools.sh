@@ -903,7 +903,8 @@ gdb_build() {
         --with-system-zlib \
         --without-guile \
         --disable-libada \
-        --enable-gdbserver
+        --enable-gdbserver \
+        --without-python
     make $PARALLEL_MAKE
     strip_debug ./gdb/gdb
     strip_debug ./gdb/gdbserver/gdbserver
