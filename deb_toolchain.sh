@@ -137,6 +137,8 @@ USAGE="Usage: $0 [mipsel|mips|armel|armbe|i686|powerpc]"
 if [[ ${BUILD_ARCH} == mipsel ]]; then
     export TARGET=mipsel-linux-gnu
     export KERNEL_ARCH=mips
+    export CFLAGS_FOR_TARGET="-O2 -pipe -mno-branch-likely -mips32r2 -mtune=mips32r2 -fno-caller-saves"
+    export CPPFLAGS_FOR_TARGET=$CFLAGS_FOR_TARGET
 elif [[ ${BUILD_ARCH} == mips ]]; then
     export TARGET=mips-linux-gnu
     export KERNEL_ARCH=mips
@@ -312,7 +314,7 @@ if ! grep -Fxq "gcc_simple" $RESULT_FILE; then
     mkdir gcc-$GCCv-build && cd gcc-$GCCv-build
     # Fix bug https://www.mail-archive.com/gcc-bugs@gcc.gnu.org/msg549392.html
     sed -i "s|#include <stdint.h>|#include <stdint.h>\n#include <linux/limits.h>|" ../gcc-$GCCv/libmpx/mpxrt/mpxrt-utils.h
-    CFLAGS="-s -static -O2" CXXFLAGS=$CFLAGS ../gcc-$GCCv/configure \
+    CFLAGS="-s -static -fPIC -O2" CXXFLAGS=$CFLAGS ../gcc-$GCCv/configure \
         --disable-shared \
         --prefix=$USR \
         --target=$TARGET \
@@ -323,7 +325,7 @@ if ! grep -Fxq "gcc_simple" $RESULT_FILE; then
         --libexecdir=$USR/lib \
         --includedir=$PREFIX/include \
         --enable-version-specific-runtime-libs \
-        --with-gxx-include-dir=$PREFIX/c++/include \
+        --with-gxx-include-dir=$PREFIX/include/c++ \
         --disable-doc \
         $GCC_PARAMS
     make $PARALLEL_MAKE all-gcc
