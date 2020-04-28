@@ -70,10 +70,10 @@ restore_output() {
 }
 
 download() {
-    SRC_ARC=$(echo $1|grep -o '[a-zA-Z0-9\.\-]\+\.tar\.[a-z0-9]\+'|head -n1)
+    SRC_ARC=$(echo $1|grep -oP '[a-zA-Z0-9\.\-\_]+\.tar\.[a-z0-9]+'|head -n1)
     print_info "Start download $SRC_ARC"
     if [ ! -f $SRC_ARC ]; then
-        wget -q $1 --no-check-certificate
+        wget -q "$1" --no-check-certificate
     fi
     if [[ ! -f $SRC_ARC ]]; then
         print_error "File $SRC_ARC not found! There may be installation problems"
@@ -143,7 +143,7 @@ init_logs() {
 upgrade_system() {
     print_info "Update apt-get"
     apt-get update && apt-get -y upgrade
-    apt-get install -y make gawk wget pkg-config
+    apt-get install -y make gawk wget pkg-config ccache
     apt-get -y autoremove
 }
 
@@ -151,8 +151,8 @@ init() {
     init_logs
     upgrade_system
     TOOLCHAIN_DIR=/usr
-    export TARGET_CC="$TARGET-gcc $CFLAGS_FOR_TARGET"
-    export TARGET_CXX="$TARGET-g++ $CFLAGS_FOR_TARGET"
+    export TARGET_CC="ccache $TARGET-gcc $CFLAGS_FOR_TARGET"
+    export TARGET_CXX="ccache $TARGET-g++ $CFLAGS_FOR_TARGET"
     export AR=$TARGET-ar
     export AS=$TARGET-as
     export RANLIB=$TARGET-ranlib
@@ -160,9 +160,7 @@ init() {
     export LDFLAGS="${LDFLAGS} -s -static "
 
     export USR=$TOOLCHAIN_DIR
-    if [[ -z $PREFIX ]]; then
-        export PREFIX=$USR/$TARGET
-    fi
+    export PREFIX=${PREFIX:=$USR/$TARGET}
     export PKG_CONFIG_LIBDIR=${PREFIX}/lib/pkgconfig
     export PKG_CONFIG_PATH=${PKG_CONFIG_LIBDIR}
     export PATH=$PATH:$PREFIX/bin:$USR/bin
@@ -239,7 +237,6 @@ export LIBPCAPv=1.8.1
 export FLEXv=2.6.4
 export E2FSv=1.43.4
 export LMAGICv=5.31
-export POPTv=1.16
 export BEECRYPTv=4.1.2
 export LDBv=6.2.23.NC
 export WGETv=1.19
@@ -247,9 +244,7 @@ export TORv=0.3.4.9
 export SSHv=7.4p1
 export DROPBEARv=2017.75
 export PYTHON2v=2.7.13
-export PYTHON3v=3.4.6
 export RPMv=4.12.0
-export JOEv=4.4
 export E2TOOLSv=0.0.16
 export EMPTYv=0.6.20b
 export GDBv=7.12
@@ -259,7 +254,6 @@ export PCAP_LINK=http://www.tcpdump.org/release/libpcap-$LIBPCAPv.tar.gz
 export FLEX_LINK=https://github.com/westes/flex/files/981163/flex-$FLEXv.tar.gz
 export E2FSPROGS_LINK=https://www.kernel.org/pub/linux/kernel/people/tytso/e2fsprogs/v$E2FSv/e2fsprogs-$E2FSv.tar.xz
 export LMAGIC_LINK=ftp://ftp.astron.com/pub/file/file-$LMAGICv.tar.gz
-export POPT_LINK=http://rpm5.org/files/popt/popt-$POPTv.tar.gz
 export BEECRYPT_LINK=http://prdownloads.sourceforge.net/beecrypt/beecrypt-$BEECRYPTv.tar.gz
 export LDB_LINK=http://download.oracle.com/berkeley-db/db-$LDBv.tar.gz
 export WGET_LINK=http://ftp.gnu.org/gnu/wget/wget-$WGETv.tar.gz
@@ -267,15 +261,13 @@ export TOR_LINK=https://www.torproject.org/dist/tor-$TORv.tar.gz
 export SSH_LINK=http://ftp.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-$SSHv.tar.gz
 export DROPBEAR_LINK=https://matt.ucc.asn.au/dropbear/releases/dropbear-$DROPBEARv.tar.bz2
 export PYTHON2_LINK=https://www.python.org/ftp/python/$PYTHON2v/Python-$PYTHON2v.tar.xz
-export PYTHON3_LINK=https://www.python.org/ftp/python/$PYTHON3v/Python-$PYTHON3v.tar.xz
 export RPM_LINK=http://ftp.rpm.org/releases/rpm-4.12.x/rpm-$RPMv.tar.bz2
-export JOE_LINK=https://sourceforge.net/projects/joe-editor/files/JOE%20sources/joe-$JOEv/joe-$JOEv.tar.gz
 export E2TOOLS_LINK=http://home.earthlink.net/~k_sheff/sw/e2tools/e2tools-$E2TOOLSv.tar.gz
 export EMPTY_LINK=https://downloads.sourceforge.net/project/empty/empty/empty-$EMPTYv/empty-$EMPTYv.tgz
 export GDB_LINK=https://ftp.gnu.org/gnu/gdb/gdb-$GDBv.tar.gz
 
 
-ARCHS=(armel armbe mipsel mips i686 powerpc tile)
+ARCHS=(armel armbe mipsel mips i686 powerpc)
 TOOLS=(wget tor ssh dropbear python2 python3 rpm e2tools empty joe gdb)
 LIBS=(zlib openssl libtasn1 libevent libpcap flex libmagic e2fsprogs libdb curl libunistring libassuan libgpg-error libgnutls)
 # redirect_output
@@ -284,6 +276,7 @@ LIBS=(zlib openssl libtasn1 libevent libpcap flex libmagic e2fsprogs libdb curl 
 #####################################################################################################
 #                                               LIBS
 #####################################################################################################
+
 
 is_lib_installed() {
     echo "void main(){}" > test.c
@@ -294,6 +287,7 @@ is_lib_installed() {
         return 0
     fi
 }
+
 
 check_lib() {
     is_lib_installed "$2"
@@ -310,13 +304,14 @@ check_lib() {
 
 resolve_deps() {
     local depends="$@"
+    print_info "(${depends[@]})"
     for dep in ${depends[@]}; do
         case "$dep" in 
             bzip2             ) lib_name="-lbz2" ;;
             libgpg-error|curl ) lib_name="-l$(echo ${dep}|sed 's|lib||')" ;;
-            gnupg             ) if [[ -e $PREFIX/bin/gpg ]]; then return; else ${dep}_build; fi ;;
-            ca-certificates   ) ${dep}_build ;;
-            *                 ) lib_name="$(pkg-config --libs --static ${dep})" ;;
+            gnupg             ) if [[ -e $PREFIX/bin/gpg ]]; then continue; fi ;;
+            ca-certificates   ) ;;
+            *                 ) lib_name="$(pkg-config --libs --static ${dep} 2>/dev/null)"; if [[ $? == 1 ]]; then lib_name="-l$(echo ${dep}|sed 's|lib||')"; fi ;;
         esac
         is_lib_installed "${lib_name}"
         if [[ $? == 0 ]]; then
@@ -640,10 +635,14 @@ magic_build() {
 
 
 popt_build() {
-    download $POPT_LINK
+    local pkgname=popt
+    local pkgver=1.16
+    local pkgdesc="A commandline option parser"
+    local source="https://deb.debian.org/debian/pool/main/p/${pkgname}/${pkgname}_${pkgver}.orig.tar.gz"
+    download ${source}
     print_info "Compile ${pkgname} - ${pkgdesc}"
-    mkdir popt-$POPTv-build && cd popt-$POPTv-build
-    LDFLAGS="${LDFLAGS} -static -s" CFLAGS="${CFLAGS} -s -static -O2" CC="$TARGET_CC" ../popt-$POPTv/configure \
+    mkdir ${pkgname}-${pkgver}-build && cd ${pkgname}-${pkgver}-build
+    CC="$TARGET_CC" ../${pkgname}-${pkgver}/configure \
         --prefix=$PREFIX \
         --host=$TARGET \
         --enable-static \
@@ -651,10 +650,10 @@ popt_build() {
         $BUILDTARGET
     make $PARALLEL_MAKE
     if [[ ! -z ${CREATE_DEB} ]]; then
-        make DESTDIR=$DEB_PACK install-strip
+        make DESTDIR=$DEB_PACK install
     fi
     if [[ ! -z ${MAKE_INSTALL} ]]; then
-        make install-strip
+        make install
     fi
     cd ..
 
@@ -730,21 +729,22 @@ ca-certificates_build() {
     local pkgver=20181109
     local pkgdesc="Common CA certificates"
     local source=https://git.archlinux.org/svntogit/packages.git/plain/trunk/update-ca-trust?h=packages/ca-certificates
+    print_info "Compile ${pkgname} - ${pkgdesc}"
     # build
     pushd $(mktemp -d)
     wget ${source} --no-check-certificate -O update-ca-trust
-    sed -ir 's|/etc|/opt/etc|' update-ca-trust
+    sed -ir "s|/etc|$(realpath ${PREFIX}/../etc)|" update-ca-trust
     # package
     install -D update-ca-trust "${PREFIX}/bin/update-ca-trust"
     # Trust source directories
-    install -d "$(realpath ${PREFIX}/..)"/{etc,usr/share}/${pkgbase}/trust-source/{anchors,blacklist}
+    install -d ${PREFIX}/../{etc,usr/share}/${pkgbase}/trust-source/{anchors,blacklist}
     # Directories used by update-ca-trust (aka "trust extract-compat")
-    install -d "$(realpath ${PREFIX}/..)"/etc/${pkgbase}/extracted
+    install -d ${PREFIX}/../etc/${pkgbase}/extracted
     # Compatibility link for OpenSSL using /etc/ssl as CAdir
     # Used in preference to the individual links in /etc/ssl/certs
-    ln -sr "$(realpath ${PREFIX}/..)/etc/${pkgbase}/extracted/tls-ca-bundle.pem" "$(realpath ${PREFIX}/..)/etc/ssl/cert.pem"
+    ln -sr "${PREFIX}/../etc/${pkgbase}/extracted/tls-ca-bundle.pem" "${PREFIX}/../etc/ssl/cert.pem"
     # Compatiblity link for legacy bundle
-    ln -sr "$(realpath ${PREFIX}/..)/etc/${pkgbase}/extracted/tls-ca-bundle.pem" "$(realpath ${PREFIX}/..)/etc/ssl/certs/ca-certificates.crt"
+    ln -sr "${PREFIX}/../etc/${pkgbase}/extracted/tls-ca-bundle.pem" "${PREFIX}/../etc/ssl/certs/ca-certificates.crt"
     ${PREFIX}/bin/update-ca-trust
     popd
 }
@@ -762,11 +762,10 @@ curl_build() {
     print_info "Compile ${pkgname} - ${pkgdesc}"
     # build
     mkdir ${pkgname}-${pkgver}-build && cd ${pkgname}-${pkgver}-build
-    LIBS="-ldl -lpthread" CFLAGS="${CFLAGS} -I$PREFIX/include" CPPFLAGS="-DCURL_STATICLIB" LDFLAGS="${LDFLAGS} -Wl,-static -L$PREFIX/lib" CC=$TARGET_CC ../${pkgname}-${pkgver}/configure \
+    LIBS="-ldl -lpthread" CPPFLAGS="-DCURL_STATICLIB" CC=$TARGET_CC ../${pkgname}-${pkgver}/configure \
         --host=$TARGET \
         --target=$TARGET \
         --prefix=$PREFIX \
-        --enable-rt \
         --disable-ipv6 \
         --disable-ldap \
         --disable-ldaps \
@@ -785,6 +784,7 @@ curl_build() {
         --disable-debug \
         --disable-curldebug \
         --disable-manual \
+        --enable-rt \
         --enable-ftp \
         --enable-http \
         --enable-cookies \
@@ -793,8 +793,8 @@ curl_build() {
         --without-axtls \
         --with-proxy \
         --with-zlib \
-        --with-ssl="$(realpath $PREFIX/..)/etc/ssl" \
-        --with-ca-bundle="$(realpath $PREFIX/..)/etc/ssl/certs/ca-certificates.crt" \
+        --with-ssl="$(realpath -s $PREFIX/../etc/ssl)" \
+        --with-ca-bundle="$(realpath -s $PREFIX/../etc/ssl/certs/ca-certificates.crt)" \
         --with-random=/dev/urandom
     make $PARALLEL_MAKE
     # package
@@ -983,7 +983,7 @@ gnutls_build() {
     print_info "Compile ${pkgname} - ${pkgdesc}"
     # build
     mkdir ${pkgname}-${pkgver}-build && cd ${pkgname}-${pkgver}-build
-    PKG_CONFIG_LIBDIR=$PREFIX/lib/pkgconfig CC="$TARGET_CC" CXX="$TARGET_CXX" ../${pkgname}-${pkgver}/configure \
+    CC="$TARGET_CC" CXX="$TARGET_CXX" ../${pkgname}-${pkgver}/configure \
         --prefix=$PREFIX \
         --host=$TARGET \
         --without-p11-kit \
@@ -1223,13 +1223,13 @@ libsecret_build() {
     print_info "Compile ${pkgname} - ${pkgdesc}"
     # build
     cd ${pkgname}-${_commit}
-    LDFLAGS="${LDFLAGS} -s" CFLAGS="${CFLAGS} -s -O2 -fPIC" CC="$TARGET_CC" ../${pkgname}-${_commit}/configure \
+    CC="$TARGET_CC" ../${pkgname}-${_commit}/configure \
         --prefix=$PREFIX \
         --host=$TARGET \
         --libdir=$PREFIX/lib \
         --libexecdir=$PREFIX/lib \
         --enable-static \
-        --sysconfdir=$PREFIX/etc
+        --sysconfdir="$(realpath $PREFIX/../etc)"
     make $PARALLEL_MAKE
     # package
     if [[ ! -z ${CREATE_DEB} ]]; then
@@ -1248,9 +1248,10 @@ libsecret_build() {
 #####################################################################################################
 
 
-pacman_build(){
+pacman_build() {
     local pkgname=pacman
     local pkgver=5.2.1
+    local pkgdesc="A library-based package manager with dependency support"
     local source=https://sources.archlinux.org/other/$pkgname/$pkgname-$pkgver.tar.gz
     local source_deps=(
         "https://git.archlinux.org/svntogit/packages.git/plain/trunk/makepkg-fix-one-more-file-seccomp-issue.patch?h=packages/pacman"
@@ -1410,7 +1411,10 @@ python2_build() {
     CFLAGS="${CFLAGS} -static -s -O2" CC="$TARGET_CC" ../Python-$PYTHON2v/configure \
         --prefix=$PREFIX \
         --target=$TARGET \
-        --enable-optimizations
+        --host=$TARGET \
+        --build=$MACHTYPE \
+        --enable-optimizations \
+        --disable-ipv6
     make $PARALLEL_MAKE
     make install
     if [[ ! -z ${CREATE_DEB} ]]; then
@@ -1421,12 +1425,28 @@ python2_build() {
 
 # Python3 build
 python3_build() {
-    download $PYTHON3_LINK
+    local pkgname=python
+    local pkgver=3.8.1
+    local pkgdesc=""
+    local source="https://www.python.org/ftp/python/${pkgver}/Python-${pkgver}.tar.xz"
+    download ${source}
     print_info "Compile ${pkgname} - ${pkgdesc}"
-    mkdir python-$PYTHON3v-build && cd python-$PYTHON3v-build
-    RANLIB=$TARGET-ranlib CC="$TARGET_CC" CFLAGS="${CFLAGS} -static -s" ../Python-$PYTHON3v/configure \
+    mkdir python-${pkgver}-build && cd python-${pkgver}-build
+    CC="$TARGET_CC" CXX="$TARGET_CXX" ../Python-${pkgver}/configure \
         --prefix=$PREFIX \
-        --target=$TARGET
+        --target=$TARGET \
+        --host=$TARGET \
+        --build=$MACHTYPE \
+        --without-pymalloc \
+        --with-ensurepip=no \
+        --without-cxx-main \
+        --enable-shared --sysconfdir=/opt/etc \
+        --with-computed-gotos \
+        --enable-optimizations \
+        ac_cv_file__dev_ptc=no \
+        ac_cv_file__dev_ptmx=no \
+        ac_cv_header_bluetooth_bluetooth_h=no \
+        ac_cv_header_bluetooth_h=no
     make $PARALLEL_MAKE
     make install
     if [[ ! -z ${CREATE_DEB} ]]; then
@@ -1489,19 +1509,28 @@ e2tools_build() {
 
 
 joe_build() {
-    download $JOE_LINK
+    local pkgname=joe
+    local pkgver=4.4
+    local pkgdesc="A high-quality data compression program"
+    local source=https://sourceforge.net/projects/joe-editor/files/JOE%20sources/${pkgname}-${pkgver}/${pkgname}-${pkgver}.tar.gz
+    download ${source}
     print_info "Compile ${pkgname} - ${pkgdesc}"
-    cd joe-$JOEv
-    LDFLAGS="-Wl,-static -s" CFLAGS="${CFLAGS} -static -s -O2" CC="$TARGET_CC" ./configure \
+    # build
+    cd ${pkgname}-${pkgver}
+    CC="$TARGET_CC" ./configure \
         --prefix=$PREFIX \
         --target=$TARGET \
         --host=$TARGET \
         --disable-curses \
         --disable-termcap
     make $PARALLEL_MAKE
+    # package
     strip_debug ./joe/joe
     cp ./joe/joe ${TOOLS_BIN_DIR}/joe_${DEB_TARGET}
     print_info "You can find it: ${TOOLS_BIN_DIR}/"
+    if [[ ! -z ${MAKE_INSTALL} ]]; then
+        make install
+    fi
     cd ..
 }
 
@@ -1530,6 +1559,45 @@ gdb_build() {
 }
 
 
+distcc_build() {
+    apt install -y autoconf
+    local pkgname=distcc
+    local pkgver=3.3.3
+    local pkgdesc='Distributed compilation service for C, C++ and Objective-C'
+    local source="https://github.com/distcc/${pkgname}/releases/download/v${pkgver}/${pkgname}-${pkgver}.tar.gz"
+    local depends=('popt' 'python3')
+    download ${source}
+    print_info "Resolve dependies for ${pkgname}"
+    # resolve_deps ${depends[@]}
+    print_info "Compile ${pkgname} - ${pkgdesc}"
+    # prepare
+    cd ${pkgname}-${pkgver}
+    ./autogen.sh
+    setconf gnome/distccmon-gnome.desktop Name 'DistCC Monitor'
+    sed -i 's/ install-gnome-data//g' Makefile.in
+    # FS#66418, support Python 3.9
+    find . -name "*.py" -type f -exec sed -i 's/time.clock()/time.perf_counter()/g' {} \;
+    # build
+    CC="$TARGET_CC" ./configure \
+        --prefix=${PREFIX} \
+        --target=$TARGET \
+        --host=$TARGET \
+        --enable-rfc2553 \
+        --mandir=${PREFIX}/share/man \
+        --sbindir=${PREFIX}/bin \
+        --sysconfdir="$(realpath -sm ${PREFIX}/../etc)" \
+        --without-avahi \
+        --without-libiberty
+        # --with-gtk
+    make WERROR_CFLAGS= INCLUDESERVER_PYTHON=/bin/python
+    if [[ ! -z ${MAKE_INSTALL} ]]; then
+        make INCLUDESERVER_PYTHON=/bin/python install-conf install-program
+    fi
+    exit
+    cd ..
+}
+
+
 options="ho:a:t:l:idv"
 if (! getopts $options opt); then usage; fi
 
@@ -1543,23 +1611,23 @@ while getopts $options opt; do
             armel   )
                 export TARGET=arm-linux-gnueabi
                 export SSL_ARCH=linux-armv4
-                export SSL_MARCH=armv5
+                export SSL_MARCH=${SSL_MARCH:-armv5}
                 ;;
             armbe   )
                 export TARGET=armbe-linux-gnueabi
                 export CFLAGS_FOR_TARGET="-mbig-endian"
                 export SSL_ARCH=linux-armv4
-                export SSL_MARCH=armv5
+                export SSL_MARCH=${SSL_MARCH:-armv5}
                 ;;
             mipsel  )
-                export TARGET=mipsel-linux-gnu
+                export TARGET=${TARGET:=mipsel-linux-gnu}
                 export SSL_ARCH=linux-mips32
-                export SSL_MARCH=mips1
+                export SSL_MARCH=${SSL_MARCH:-mips1}
                 ;;
             mips    )
                 export TARGET=mips-linux-gnu
                 export SSL_ARCH=linux-mips32
-                export SSL_MARCH=mips1
+                export SSL_MARCH=${SSL_MARCH:-mips1}
                 ;;
             powerpc )
                 export TARGET=powerpc-linux-gnu
@@ -1569,10 +1637,6 @@ while getopts $options opt; do
                 export TARGET=i686-linux-gnu
                 export SSL_ARCH=linux-generic32
                 # export SSL_MARCH=i386
-                ;;
-            tile    )
-                export TARGET=tilegx-linux-gnu
-                export CFLAGS_FOR_TARGET="-m32"
                 ;;
             *       ) usage ;;
         esac
