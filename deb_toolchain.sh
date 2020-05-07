@@ -186,7 +186,7 @@ trap 'err_report $LINENO' ERR
 trap 'restore_output' EXIT
 
 
-TOOLCHAIN_DIR=/usr
+TOOLCHAIN_DIR=""
 export TARGET_CC="${TARGET}-gcc ${CFLAGS_FOR_TARGET}"
 # Global version vars
 export GCCv=7.1.0
@@ -199,7 +199,7 @@ export ISLv=0.16.1
 export CLOOGv=0.18.1
 export KERNELv=3.2.1 #2.6.38.8
 # Global param vars
-export USR=${TOOLCHAIN_DIR}
+export USR=${TOOLCHAIN_DIR}/usr
 export PREFIX=${USR}/${TARGET}
 export PATH=${PATH}:${PREFIX}/bin:${USR}/bin
 export PARALLEL_MAKE="-j$((`nproc` * 2))"
@@ -420,8 +420,21 @@ for item in $(file ${USR}/bin/$TARGET*|grep ELF|tr : ' '|awk '{print $1}'); do
 done
 
 
-print_success "Toolchain for $TARGET is ready"
-print_success "Use $TARGET_CC for compile your projects"
+print_success "Toolchain for ${TARGET} is ready. Set distcc server"
+apt install -y distcc
+cat << EOF > /etc/default/distcc
+STARTDISTCC="true"
+ALLOWEDNETS="127.0.0.1 10.0.0.0/8 192.168.0.0/16"
+LISTENER="0.0.0.0"
+NICE="10"
+JOBS="$((`nproc` * 2))"
+ZEROCONF="false"
+EOF
+ln -sf ${TARGET}-gcc /usr/{lib/distcc,bin}/gcc
+ln -sf ${TARGET}-gcc /usr/{lib/distcc,bin}/cc
+ln -sf ${TARGET}-g++ /usr/{lib/distcc,bin}/c++
+ln -sf ${TARGET}-g++ /usr/{lib/distcc,bin}/g++
+print_success "Use ${TARGET_CC} for compile your projects. You can connect to distccd"
 
 
 if [ ! -z ${MAKE_DEB} ]; then

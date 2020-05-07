@@ -11,3 +11,5 @@ RUN /tmp/deb_toolchain.sh ${ARCH}
 
 ADD tools.sh /tmp/tools.sh
 RUN /tmp/tools.sh -i -v -a ${ARCH} -l 'zlib openssl libevent'
+
+ENTRYPOINT service distcc start && /bin/bash
