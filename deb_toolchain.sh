@@ -348,8 +348,9 @@ if ! grep -Fxq "libc_basic" ${RESULT_FILE}; then
         --target=${TARGET} \
         --with-headers=${PREFIX}/include \
         --disable-multilib \
-        libc_cv_forced_unwind=yes \
-        libc_cv_ssp=no
+        libc_cv_ssp=no \
+        ${GLIBC_EX_FLAGS}
+        # libc_cv_forced_unwind=yes \
     make install-bootstrap-headers=yes install-headers DESTDIR=${DEB_PACK}
     make install-bootstrap-headers=yes install-headers
     make ${PARALLEL_MAKE} csu/subdir_lib CC="${TARGET_CC}"

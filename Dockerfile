@@ -2,6 +2,23 @@ FROM ubuntu:bionic
 MAINTAINER GH0st3rs
 ARG ARCH=mipsel
 
+# ENV
+
+ARG TARGET=""
+ENV TARGET="${TARGET}"
+
+ARG CFLAGS_FOR_TARGET=""
+ENV CFLAGS_FOR_TARGET="${CFLAGS_FOR_TARGET}"
+
+ARG CPPFLAGS_FOR_TARGET=""
+ENV CPPFLAGS_FOR_TARGET="${CPPFLAGS_FOR_TARGET}"
+
+ARG GCC_PARAMS=""
+ENV GCC_PARAMS="${GCC_PARAMS}"
+
+ARG GLIBC_EX_FLAGS=""
+ENV GLIBC_EX_FLAGS="${GLIBC_EX_FLAGS}"
+
 WORKDIR /tmp
 
 RUN apt-get update && apt-get -y upgrade && apt-get install -y g++ make gawk autoconf libtool bison wget texinfo
