@@ -1609,32 +1609,32 @@ while getopts $options opt; do
     v   ) export VERBOSE=true;;
     a   ) case $OPTARG in
             armel   )
-                export TARGET=arm-linux-gnueabi
+                export TARGET=TARGET=${TARGET:=arm-linux-gnueabi}
                 export SSL_ARCH=linux-armv4
-                export SSL_MARCH=${SSL_MARCH:-armv5}
+                export SSL_MARCH=${SSL_MARCH:=armv5}
                 ;;
             armbe   )
-                export TARGET=armbe-linux-gnueabi
+                export TARGET=${TARGET:=armbe-linux-gnueabi}
                 export CFLAGS_FOR_TARGET="-mbig-endian"
                 export SSL_ARCH=linux-armv4
-                export SSL_MARCH=${SSL_MARCH:-armv5}
+                export SSL_MARCH=${SSL_MARCH:=armv5}
                 ;;
             mipsel  )
                 export TARGET=${TARGET:=mipsel-linux-gnu}
                 export SSL_ARCH=linux-mips32
-                export SSL_MARCH=${SSL_MARCH:-mips1}
+                export SSL_MARCH=${SSL_MARCH:=mips1}
                 ;;
             mips    )
-                export TARGET=mips-linux-gnu
+                export TARGET=${TARGET:=mips-linux-gnu}
                 export SSL_ARCH=linux-mips32
-                export SSL_MARCH=${SSL_MARCH:-mips1}
+                export SSL_MARCH=${SSL_MARCH:=mips1}
                 ;;
             powerpc )
-                export TARGET=powerpc-linux-gnu
+                export TARGET=${TARGET:=powerpc-linux-gnu}
                 export SSL_ARCH=linux-ppc
                 ;;
             i686     )
-                export TARGET=i686-linux-gnu
+                export TARGET=${TARGET:=i686-linux-gnu}
                 export SSL_ARCH=linux-generic32
                 # export SSL_MARCH=i386
                 ;;

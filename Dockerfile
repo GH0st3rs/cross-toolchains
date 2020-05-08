@@ -19,6 +19,9 @@ ENV GCC_PARAMS="${GCC_PARAMS}"
 ARG GLIBC_EX_FLAGS=""
 ENV GLIBC_EX_FLAGS="${GLIBC_EX_FLAGS}"
 
+ARG SSL_MARCH=""
+ENV SSL_MARCH="${SSL_MARCH}"
+
 WORKDIR /tmp
 
 RUN apt-get update && apt-get -y upgrade && apt-get install -y g++ make gawk autoconf libtool bison wget texinfo

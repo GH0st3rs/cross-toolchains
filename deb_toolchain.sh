@@ -225,7 +225,7 @@ if [[ ${KERNELv} > 2.3 ]] && [[ ${KERNELv} < 2.4 ]]; then export KERNEL_GEN=v2.3
 redirect_output
 print_info "Update apt-get"
 apt-get update && apt-get -y upgrade
-apt-get install -y g++ make gawk autoconf libtool bison wget texinfo
+apt-get install -y g++ make gawk autoconf libtool bison wget texinfo gettext
 apt-get -y autoremove
 
 
@@ -348,9 +348,9 @@ if ! grep -Fxq "libc_basic" ${RESULT_FILE}; then
         --target=${TARGET} \
         --with-headers=${PREFIX}/include \
         --disable-multilib \
+        libc_cv_forced_unwind=yes \
         libc_cv_ssp=no \
         ${GLIBC_EX_FLAGS}
-        # libc_cv_forced_unwind=yes \
     make install-bootstrap-headers=yes install-headers DESTDIR=${DEB_PACK}
     make install-bootstrap-headers=yes install-headers
     make ${PARALLEL_MAKE} csu/subdir_lib CC="${TARGET_CC}"
@@ -421,23 +421,7 @@ for item in $(file ${USR}/bin/$TARGET*|grep ELF|tr : ' '|awk '{print $1}'); do
 done
 
 
-print_success "Toolchain for ${TARGET} is ready. Set distcc server"
-apt install -y distcc
-cat << EOF > /etc/default/distcc
-STARTDISTCC="true"
-ALLOWEDNETS="127.0.0.1 10.0.0.0/8 192.168.0.0/16"
-LISTENER="0.0.0.0"
-NICE="10"
-JOBS="$((`nproc` * 2))"
-ZEROCONF="false"
-EOF
-ln -sf ${TARGET}-gcc /usr/{lib/distcc,bin}/gcc
-ln -sf ${TARGET}-gcc /usr/{lib/distcc,bin}/cc
-ln -sf ${TARGET}-g++ /usr/{lib/distcc,bin}/c++
-ln -sf ${TARGET}-g++ /usr/{lib/distcc,bin}/g++
-print_success "Use ${TARGET_CC} for compile your projects. You can connect to distccd"
-
-
+print_info "Check if need make the deb package"
 if [ ! -z ${MAKE_DEB} ]; then
     if ! grep -Fxq "deb" ${RESULT_FILE}; then
         print_info "Start create deb package"
@@ -479,8 +463,32 @@ if [ ! -z ${MAKE_DEB} ]; then
     fi
 fi
 
+
 print_info "Remove unneeded files"
 apt-get autoremove -y --purge g++ autoconf libtool bison texinfo
 apt-get autoclean -y
 apt-get clean -y
 rm -rf /tmp/* && rm -rf /var/{cache,log}/*
+
+
+print_success "Toolchain for ${TARGET} is ready. Set distcc server"
+apt install -y distcc
+cat << EOF > /etc/default/distcc
+STARTDISTCC="true"
+ALLOWEDNETS="127.0.0.1 10.0.0.0/8 192.168.0.0/16"
+LISTENER="0.0.0.0"
+NICE="10"
+JOBS="$((`nproc` * 2))"
+ZEROCONF="false"
+EOF
+_targets1=(lib/distcc bin)
+_targets2=(gcc cc c++ g++)
+for d in "${_targets1[@]}"; do
+    for bin in "${_targets2[@]}"; do
+        case ${bin:(-2):2} in
+            "++" ) ln -sf ${TARGET}-g++ /usr/${d}/${bin} ;;
+            "cc" ) ln -sf ${TARGET}-gcc /usr/${d}/${bin} ;;
+        esac
+    done
+done
+print_success "Use ${TARGET_CC} for compile your projects. You can connect to distccd"
