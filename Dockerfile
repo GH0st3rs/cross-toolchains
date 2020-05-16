@@ -29,6 +29,7 @@ RUN apt-get update && apt-get -y upgrade && apt-get install -y g++ make gawk aut
 ADD deb_toolchain.sh /tmp/deb_toolchain.sh
 RUN /tmp/deb_toolchain.sh ${ARCH}
 
+# Pre-install zlib, openssl and libevent
 ADD tools.sh /tmp/tools.sh
 RUN /tmp/tools.sh -i -v -a ${ARCH} -l 'zlib openssl libevent'
 

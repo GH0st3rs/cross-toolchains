@@ -200,7 +200,7 @@ export CLOOGv=0.18.1
 export KERNELv=3.2.1 #2.6.38.8
 # Global param vars
 export USR=${TOOLCHAIN_DIR}/usr
-export PREFIX=${USR}/${TARGET}
+export PREFIX=${PREFIX:=$USR/$TARGET}
 export PATH=${PATH}:${PREFIX}/bin:${USR}/bin
 export PARALLEL_MAKE="-j$((`nproc` * 2))"
 if [[ $(uname -m) == x86_64 ]]; then
@@ -346,6 +346,11 @@ if ! grep -Fxq "libc_basic" ${RESULT_FILE}; then
         --build=$MACHTYPE \
         --host=${TARGET} \
         --target=${TARGET} \
+        --sysconfdir="$(realpath ${PREFIX}/../etc)" \
+        --localstatedir="$(realpath ${PREFIX}/../var)" \
+        --includedir=${PREFIX}/include \
+        --libdir=${PREFIX}/lib \
+        --libexecdir=${PREFIX}/lib \
         --with-headers=${PREFIX}/include \
         --disable-multilib \
         libc_cv_forced_unwind=yes \
@@ -465,7 +470,7 @@ fi
 
 
 print_info "Remove unneeded files"
-apt-get autoremove -y --purge g++ autoconf libtool bison texinfo
+apt-get autoremove -y --purge g++ autoconf libtool bison texinfo binutils
 apt-get autoclean -y
 apt-get clean -y
 rm -rf /tmp/* && rm -rf /var/{cache,log}/*
@@ -491,4 +496,5 @@ for d in "${_targets1[@]}"; do
         esac
     done
 done
+[ -f /etc/post_toolchain_script.sh ] && /bin/bash /etc/post_toolchain_script.sh
 print_success "Use ${TARGET_CC} for compile your projects. You can connect to distccd"
