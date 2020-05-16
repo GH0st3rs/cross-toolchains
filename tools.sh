@@ -247,7 +247,6 @@ export PYTHON2v=2.7.13
 export RPMv=4.12.0
 export E2TOOLSv=0.0.16
 export EMPTYv=0.6.20b
-export GDBv=7.12
 # Links
 
 export PCAP_LINK=http://www.tcpdump.org/release/libpcap-$LIBPCAPv.tar.gz
@@ -264,7 +263,6 @@ export PYTHON2_LINK=https://www.python.org/ftp/python/$PYTHON2v/Python-$PYTHON2v
 export RPM_LINK=http://ftp.rpm.org/releases/rpm-4.12.x/rpm-$RPMv.tar.bz2
 export E2TOOLS_LINK=http://home.earthlink.net/~k_sheff/sw/e2tools/e2tools-$E2TOOLSv.tar.gz
 export EMPTY_LINK=https://downloads.sourceforge.net/project/empty/empty/empty-$EMPTYv/empty-$EMPTYv.tgz
-export GDB_LINK=https://ftp.gnu.org/gnu/gdb/gdb-$GDBv.tar.gz
 
 
 ARCHS=(armel armbe mipsel mips i686 powerpc)
@@ -342,7 +340,7 @@ zlib_build() {
     cd ..
 
     # Test zlib
-    check_lib "zLib" "-lz"
+    check_lib "zLib" "$(pkg-config --libs --static zlib)"
     DEB_DESC+="\n .\n zlib-$ZLIBv"
     TOOLS_NAME+="-zlib"
 }
@@ -1536,13 +1534,23 @@ joe_build() {
 
 
 gdb_build() {
-    download $GDB_LINK
     apt-get install -y gcc g++
+    local pkgname=gdb
+    local pkgver=7.12
+    local source=https://ftp.gnu.org/gnu/${pkgname}/${pkgname}-${pkgver}.tar.gz
+    local depends=('zlib')
+    download ${source}
+    print_info "Resolve dependies for ${pkgname}"
+    resolve_deps ${depends[@]}
     print_info "Compile ${pkgname} - ${pkgdesc}"
-    mkdir gdb-$GDBv-build && cd gdb-$GDBv-build
-    sed -i 's/*argp ==/*argp[0] ==/' ../gdb-$GDBv/gdb/location.c
-    for x in $(grep -rl "RDYNAMIC=[\'\"]-Wl.*[\'\"]" ../gdb-$GDBv/); do sed -i "s|RDYNAMIC=[\'\"]-Wl.*[\'\"]|RDYNAMIC=\"\"|g" $x; done
-    LDFLAGS="${LDFLAGS} -s -static -L$PREFIX/lib" CFLAGS="${CFLAGS} -s -static -O2 -I$PREFIX/include" CXXFLAGS=$CFLAGS CC="$TARGET_CC" CXX="$TARGET_CXX" ../gdb-$GDBv/configure \
+    # prepare
+    mkdir ${pkgname}-${pkgver}-build && cd ${pkgname}-${pkgver}-build
+    sed -i 's/*argp ==/*argp[0] ==/' ../${pkgname}-${pkgver%%[!0-9.]*}*/gdb/location.c
+    for x in $(grep -rl "RDYNAMIC=[\'\"]-Wl.*[\'\"]" ../${pkgname}-${pkgver%%[!0-9.]*}*/); do
+        sed -i "s|RDYNAMIC=[\'\"]-Wl.*[\'\"]|RDYNAMIC=\"\"|g" $x;
+    done
+    # build
+    LDFLAGS="${LDFLAGS} -L${PREFIX}/lib" CFLAGS="${CFLAGS} -I${PREFIX}/include" CXXFLAGS=${CFLAGS} CC="$TARGET_CC" CXX="$TARGET_CXX" ../${pkgname}-${pkgver%%[!0-9.]*}*/configure \
         --host=$TARGET \
         --target=$TARGET \
         --with-system-zlib \
@@ -1609,7 +1617,7 @@ while getopts $options opt; do
     v   ) export VERBOSE=true;;
     a   ) case $OPTARG in
             armel   )
-                export TARGET=TARGET=${TARGET:=arm-linux-gnueabi}
+                export TARGET=${TARGET:=arm-linux-gnueabi}
                 export SSL_ARCH=linux-armv4
                 export SSL_MARCH=${SSL_MARCH:=armv5}
                 ;;
