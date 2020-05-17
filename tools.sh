@@ -78,21 +78,21 @@ restore_output() {
 
 download() {
     SRC_ARC=$(echo $1|grep -oP '[a-zA-Z0-9\.\-\_]+\.tar\.[a-z0-9]+'|head -n1)
-    print_info "Start download $SRC_ARC"
-    if [ ! -f $SRC_ARC ]; then
+    print_info "Start download ${SRC_ARC}"
+    if [ ! -f ${SRC_ARC} ]; then
         wget -q "$1" --no-check-certificate
     fi
-    if [[ ! -f $SRC_ARC ]]; then
-        print_error "File $SRC_ARC not found! There may be installation problems"
+    if [[ ! -f ${SRC_ARC} ]]; then
+        print_error "File ${SRC_ARC} not found! There may be installation problems"
     else
         restore_output
-        echo -n "${GREEN}[+] Extracting: $SRC_ARC"; tar -xf $SRC_ARC; echo " => done${NC}"
+        echo -n "${GREEN}[+] Extracting: $SRC_ARC"; tar -xf ${SRC_ARC}; echo " => done${NC}"
         redirect_output
     fi
 }
 
 strip_debug() {
-    $TARGET-strip --strip-unneeded --strip-debug -x -R .comment -R .note.ABI-tag -R .note.gnu.build-id $1
+    ${TARGET}-strip --strip-unneeded --strip-debug -x -R .comment -R .note.ABI-tag -R .note.gnu.build-id $1
 }
 
 print_info() {
@@ -171,7 +171,7 @@ init() {
     export PKG_CONFIG_LIBDIR=${PREFIX}/lib/pkgconfig
     export PKG_CONFIG_PATH=${PKG_CONFIG_LIBDIR}
     export PATH=$PATH:$PREFIX/bin:$USR/bin
-    export PARALLEL_MAKE=-j3
+    export PARALLEL_MAKE="-j$((`nproc` * 2))"
     # if [[ $(uname -m) == x86_64 ]]; then
     #     export DEB_ARCH=amd64
     # else
@@ -181,7 +181,7 @@ init() {
     export DEB_ARCH=all
     export DEBv=1.0
     export DEB_TARGET=$1 #$(echo $TARGET|tr '-' ' '|awk '{print $1}')
-    if [[ -z $DEB_PACK ]]; then
+    if [[ -z ${DEB_PACK} ]]; then
         export DEB_PACK=$(pwd)/${DEB_TARGET}_tools_v${DEBv}_${DEB_ARCH}
     fi
     export TMP_BUILD_DIR=${WORK_DIRECTORY}/${DEB_TARGET}-cross
@@ -208,11 +208,11 @@ init() {
     if [[ ! -d ${TOOLS_BIN_DIR} ]]; then
         mkdir -p ${TOOLS_BIN_DIR}
     fi
-    # if [[ -d $DEB_PACK ]]; then
-    #     rm -rf $DEB_PACK
+    # if [[ -d ${DEB_PACK} ]]; then
+    #     rm -rf ${DEB_PACK}
     # fi
     # if ((CREATE_PACKAGE)); then
-    #     mkdir -p $DEB_PACK
+    #     mkdir -p ${DEB_PACK}
     # fi
 }
 
@@ -335,7 +335,7 @@ zlib_build() {
     CC="$TARGET_CC" ./configure \
         --prefix=${PREFIX} \
         --static
-    make $PARALLEL_MAKE
+    make ${PARALLEL_MAKE}
     if ((CREATE_PACKAGE)); then
         make DESTDIR=${DEB_PACK} install
     fi
@@ -381,7 +381,7 @@ openssl_build() {
         -fPIC -I${PREFIX}/include -L${PREFIX}/lib \
         ${LDFLAGS} ${CFLAGS} \
         ${EXTRA_FLAGS}
-    make $PARALLEL_MAKE
+    make ${PARALLEL_MAKE}
     strip_debug apps/openssl
     # package
     if ((MAKE_INSTALL)); then
@@ -399,7 +399,7 @@ openssl_build() {
             -fPIC -I${PREFIX}/include -L${PREFIX}/lib \
             ${LDFLAGS} ${CFLAGS} \
             ${EXTRA_FLAGS}
-        make $PARALLEL_MAKE
+        make ${PARALLEL_MAKE}
         make install
     fi
     cd ..
@@ -423,12 +423,12 @@ libevent_build() {
     print_info "Compile ${pkgname} - ${pkgdesc}"
     mkdir ${pkgname}-${pkgver}-build && cd ${pkgname}-${pkgver}-build
     CFLAGS="${CFLAGS} -ldl" CC="$TARGET_CC" ../${pkgname}-${pkgver}/configure \
-        --host=$TARGET \
+        --host=${TARGET} \
         --with-pic \
-        --prefix=$PREFIX \
+        --prefix=${PREFIX} \
         --enable-static \
         $BUILDTARGET
-    make $PARALLEL_MAKE
+    make ${PARALLEL_MAKE}
     if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install
     fi
@@ -453,12 +453,12 @@ libtasn1_build() {
     # build
     mkdir ${pkgname}-${pkgver}-build && cd ${pkgname}-${pkgver}-build
     CC="$TARGET_CC" ../${pkgname}-${pkgver}/configure \
-        --prefix=$PREFIX \
-        --host=$TARGET \
+        --prefix=${PREFIX} \
+        --host=${TARGET} \
         --disable-doc \
         --enable-static \
         $BUILDTARGET
-    make $PARALLEL_MAKE
+    make ${PARALLEL_MAKE}
     # package
     if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install-strip
@@ -484,9 +484,9 @@ flex_build() {
     else
         LDFLAGS="${LDFLAGS} -static -s" CFLAGS="${CFLAGS} -static -O2 -s" CXXFLAGS=$CFLAGS CC="$TARGET_CC" ../flex-$FLEXv/configure --prefix=$PREFIX --enable-static --host=$TARGET $BUILDTARGET
     fi
-    make $PARALLEL_MAKE
+    make ${PARALLEL_MAKE}
     # make install-strip
-    make DESTDIR=$DEB_PACK install-strip
+    make DESTDIR=${DEB_PACK} install-strip
     if [[ $1 != i686 ]] || [[ $1 != i686 ]]; then
         rm -rf $PREFIX/bin/flex*
         if [[ $(uname -m) == x86_64 ]]; then
@@ -494,7 +494,7 @@ flex_build() {
         else
             LDFLAGS="${LDFLAGS} -static -s" CFLAGS="${CFLAGS} -static -O2 -s" CXXFLAGS=$CFLAGS CC=gcc ../flex-$FLEXv/configure --prefix=$PREFIX --enable-static --disable-libfl
         fi
-        make $PARALLEL_MAKE
+        make ${PARALLEL_MAKE}
         make install-strip
     fi
     cd ..
@@ -521,10 +521,10 @@ libpcap_build() {
         --with-pcap=linux \
         --disable-shared \
         $BUILDTARGET
-    make $PARALLEL_MAKE
+    make ${PARALLEL_MAKE}
     make install
     if ((CREATE_PACKAGE)); then
-        make DESTDIR=$DEB_PACK install
+        make DESTDIR=${DEB_PACK} install
     fi
     cd ..
 
@@ -550,15 +550,15 @@ libarchive_build() {
     # build
     mkdir ${pkgname}-${pkgver}-build && cd ${pkgname}-${pkgver}-build
     CC="$TARGET_CC" ../${pkgname}-${pkgver}/configure \
-        --prefix=$PREFIX \
-        --host=$TARGET \
+        --prefix=${PREFIX} \
+        --host=${TARGET} \
         --enable-static \
         --without-xml2 \
         --without-lzma \
         --without-openssl \
         --with-zlib \
         $BUILDTARGET
-    make $PARALLEL_MAKE
+    make ${PARALLEL_MAKE}
     # package
     if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install-strip
@@ -590,9 +590,9 @@ e2fsprogs_build() {
         --disable-testio-debug \
         --disable-fsck \
         $BUILDTARGET
-    make $PARALLEL_MAKE
+    make ${PARALLEL_MAKE}
     if ((CREATE_PACKAGE)); then
-        make DESTDIR=$DEB_PACK install-libs
+        make DESTDIR=${DEB_PACK} install-libs
     fi
     if ((MAKE_INSTALL)); then
         make install-strip
@@ -619,9 +619,9 @@ magic_build() {
         --includedir=$PREFIX/include \
         --libdir=$PREFIX/lib \
         $BUILDTARGET
-    make $PARALLEL_MAKE
+    make ${PARALLEL_MAKE}
     if ((CREATE_PACKAGE)); then
-        make DESTDIR=$DEB_PACK install-strip
+        make DESTDIR=${DEB_PACK} install-strip
     fi
     if ((MAKE_INSTALL)); then
         make install-strip
@@ -646,12 +646,12 @@ popt_build() {
     print_info "Compile ${pkgname} - ${pkgdesc}"
     mkdir ${pkgname}-${pkgver}-build && cd ${pkgname}-${pkgver}-build
     CC="$TARGET_CC" ../${pkgname}-${pkgver}/configure \
-        --prefix=$PREFIX \
-        --host=$TARGET \
+        --prefix=${PREFIX} \
+        --host=${TARGET} \
         --enable-static \
         --disable-nls \
         $BUILDTARGET
-    make $PARALLEL_MAKE
+    make ${PARALLEL_MAKE}
     if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install
     fi
@@ -681,9 +681,9 @@ beecrypt_build() {
         --disable-debug \
         --without-java \
         $BUILDTARGET
-    make $PARALLEL_MAKE
+    make ${PARALLEL_MAKE}
     if ((CREATE_PACKAGE)); then
-        make DESTDIR=$DEB_PACK install-strip
+        make DESTDIR=${DEB_PACK} install-strip
     fi
     if ((MAKE_INSTALL)); then
         make install-strip
@@ -709,9 +709,9 @@ db_build() {
         --disable-java \
         --enable-static \
         $BUILDTARGET
-    make $PARALLEL_MAKE
+    make ${PARALLEL_MAKE}
     if ((CREATE_PACKAGE)); then
-        make DESTDIR=$DEB_PACK install_lib install_include
+        make DESTDIR=${DEB_PACK} install_lib install_include
     fi
     make install_lib install_include
     cd ..
@@ -766,9 +766,9 @@ curl_build() {
     # build
     mkdir ${pkgname}-${pkgver}-build && cd ${pkgname}-${pkgver}-build
     LIBS="-ldl -lpthread" CPPFLAGS="-DCURL_STATICLIB" CC=$TARGET_CC ../${pkgname}-${pkgver}/configure \
-        --host=$TARGET \
-        --target=$TARGET \
-        --prefix=$PREFIX \
+        --host=${TARGET} \
+        --target=${TARGET} \
+        --prefix=${PREFIX} \
         --disable-ipv6 \
         --disable-ldap \
         --disable-ldaps \
@@ -796,10 +796,10 @@ curl_build() {
         --without-axtls \
         --with-proxy \
         --with-zlib \
-        --with-ssl="$(realpath -s $PREFIX/../etc/ssl)" \
-        --with-ca-bundle="$(realpath -s $PREFIX/../etc/ssl/certs/ca-certificates.crt)" \
+        --with-ssl="$(realpath -s ${PREFIX}/../etc/ssl)" \
+        --with-ca-bundle="$(realpath -s ${PREFIX}/../etc/ssl/certs/ca-certificates.crt)" \
         --with-random=/dev/urandom
-    make $PARALLEL_MAKE
+    make ${PARALLEL_MAKE}
     # package
     strip_debug src/curl
     if ((CREATE_PACKAGE)); then
@@ -830,10 +830,10 @@ libunistring_build() {
     sed -i '/pragma weak pthread_create/d' tests/glthread/thread.h
     # build
     CC="$TARGET_CC" ../${pkgname}-${pkgver}/configure \
-        --prefix=$PREFIX \
-        --host=$TARGET \
+        --prefix=${PREFIX} \
+        --host=${TARGET} \
         --enable-static
-    make $PARALLEL_MAKE
+    make ${PARALLEL_MAKE}
     # package
     if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install
@@ -860,11 +860,11 @@ libgpg-error_build() {
     autoreconf -vfi
     # build
     CC="$TARGET_CC" ./configure \
-        --prefix=$PREFIX \
-        --host=$TARGET \
+        --prefix=${PREFIX} \
+        --host=${TARGET} \
         --disable-doc \
         --enable-static
-    make $PARALLEL_MAKE
+    make ${PARALLEL_MAKE}
     # package
     if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install-strip
@@ -891,11 +891,11 @@ libassuan_build() {
     # build
     mkdir ${pkgname}-${pkgver}-build && cd ${pkgname}-${pkgver}-build
     CC="$TARGET_CC" ../${pkgname}-${pkgver}/configure \
-        --prefix=$PREFIX \
-        --host=$TARGET \
+        --prefix=${PREFIX} \
+        --host=${TARGET} \
         --disable-doc \
         --enable-static
-    make $PARALLEL_MAKE
+    make ${PARALLEL_MAKE}
     # package
     if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install-strip
@@ -920,13 +920,13 @@ gmp_build() {
     # build
     mkdir ${pkgname}-${pkgver}-build && cd ${pkgname}-${pkgver}-build
     CC="$TARGET_CC" ../${pkgname}-${pkgver}/configure \
-        --prefix=$PREFIX \
-        --host=$TARGET \
+        --prefix=${PREFIX} \
+        --host=${TARGET} \
         --enable-cxx \
         --enable-fat \
         --build=${MACHTYPE} \
         --enable-static
-    make $PARALLEL_MAKE
+    make ${PARALLEL_MAKE}
     # package
     if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install-strip
@@ -954,12 +954,12 @@ nettle_build() {
     # build
     mkdir ${pkgname}-${pkgver}-build && cd ${pkgname}-${pkgver}-build
     CC="$TARGET_CC" ../${pkgname}-${pkgver}/configure \
-        --prefix=$PREFIX \
-        --host=$TARGET \
+        --prefix=${PREFIX} \
+        --host=${TARGET} \
         --enable-mini-gmp \
         --enable-static \
         --disable-shared
-    make $PARALLEL_MAKE
+    make ${PARALLEL_MAKE}
     # package
     if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install
@@ -987,8 +987,8 @@ gnutls_build() {
     # build
     mkdir ${pkgname}-${pkgver}-build && cd ${pkgname}-${pkgver}-build
     CC="$TARGET_CC" CXX="$TARGET_CXX" ../${pkgname}-${pkgver}/configure \
-        --prefix=$PREFIX \
-        --host=$TARGET \
+        --prefix=${PREFIX} \
+        --host=${TARGET} \
         --without-p11-kit \
         --disable-doc \
         --enable-static \
@@ -1017,12 +1017,12 @@ npth_build() {
     # build
     mkdir ${pkgname}-${pkgver}-build && cd ${pkgname}-${pkgver}-build
     CC="$TARGET_CC" ../${pkgname}-${pkgver}/configure \
-        --prefix=$PREFIX \
-        --host=$TARGET \
+        --prefix=${PREFIX} \
+        --host=${TARGET} \
         --enable-maintainer-mode \
         --enable-static \
         --enable-shared
-    make $PARALLEL_MAKE
+    make ${PARALLEL_MAKE}
     # package
     if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install-strip
@@ -1050,10 +1050,10 @@ libksba_build() {
     # build
     mkdir ${pkgname}-${pkgver}-build && cd ${pkgname}-${pkgver}-build
     CC="$TARGET_CC" ../${pkgname}-${pkgver}/configure \
-        --prefix=$PREFIX \
-        --host=$TARGET \
+        --prefix=${PREFIX} \
+        --host=${TARGET} \
         --enable-static
-    make $PARALLEL_MAKE
+    make ${PARALLEL_MAKE}
     # package
     if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install-strip
@@ -1087,13 +1087,13 @@ libgcrypt_build() {
     autoreconf -vfi
     # build
     LDFLAGS="${LDFLAGS} -Wl,-static" CC="$TARGET_CC" ../${pkgname}-${pkgver}/configure \
-        --prefix=$PREFIX \
-        --host=$TARGET \
+        --prefix=${PREFIX} \
+        --host=${TARGET} \
         --disable-doc \
         --disable-padlock-support \
         --enable-static \
         --with-libgpg-error-prefix=$PREFIX
-    make $PARALLEL_MAKE
+    make ${PARALLEL_MAKE}
     # package
     if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install-strip
@@ -1125,14 +1125,14 @@ gnupg_build() {
     patch -R -p1 -i self-sigs-only.patch
     # build
     LIBGNUTLS_LIBS=$(pkg-config --libs --static gnutls) CC="$TARGET_CC" ./configure \
-        --prefix=$PREFIX \
-        --host=$TARGET \
+        --prefix=${PREFIX} \
+        --host=${TARGET} \
         --disable-doc \
         --enable-symcryptrun \
         --enable-maintainer-mode \
-        --sysconfdir="$(realpath $PREFIX/../etc)" \
-        --sbindir=$PREFIX/bin \
-        --libexecdir=$PREFIX/lib/gnupg \
+        --sysconfdir="$(realpath ${PREFIX}/../etc)" \
+        --sbindir=${PREFIX}/bin \
+        --libexecdir=${PREFIX}/lib/gnupg \
         --disable-all-tests
     make
     # package
@@ -1165,13 +1165,13 @@ gpgme_build() {
     sed -ri 's|^(LIBS = )$|\1\$\(LIBASSUAN_LIBS\)|' ../${pkgbase}-${pkgver}/lang/cpp/tests/Makefile*
     # build
     CC="$TARGET_CC" CXX="$TARGET_CXX" ../${pkgbase}-${pkgver}/configure \
-        --prefix=$PREFIX \
-        --host=$TARGET \
+        --prefix=${PREFIX} \
+        --host=${TARGET} \
         --enable-static \
         --disable-gpgsm-test \
         --disable-fd-passing \
-        --with-libassuan-prefix=$PREFIX
-    make $PARALLEL_MAKE
+        --with-libassuan-prefix=${PREFIX} \
+    make ${PARALLEL_MAKE}
     # package
     if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install-strip
@@ -1193,13 +1193,13 @@ attr_build() {
     # build
     mkdir ${pkgname}-${pkgver}-build && cd ${pkgname}-${pkgver}-build
     LDFLAGS="${LDFLAGS} -Wl,-static" CC="$TARGET_CC" ../${pkgname}-${pkgver}/configure \
-        --prefix=$PREFIX \
-        --host=$TARGET \
-        --libdir=$PREFIX/lib \
-        --libexecdir=$PREFIX/lib \
+        --prefix=${PREFIX} \
+        --host=${TARGET} \
+        --libdir=${PREFIX}/lib \
+        --libexecdir=${PREFIX}/lib \
         --enable-static \
-        --sysconfdir="$(realpath $PREFIX/../etc)"
-    make $PARALLEL_MAKE
+        --sysconfdir="$(realpath ${PREFIX}/../etc)" \
+    make ${PARALLEL_MAKE}
     # package
     if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install-strip
@@ -1227,13 +1227,13 @@ libsecret_build() {
     # build
     cd ${pkgname}-${_commit}
     CC="$TARGET_CC" ../${pkgname}-${_commit}/configure \
-        --prefix=$PREFIX \
-        --host=$TARGET \
-        --libdir=$PREFIX/lib \
-        --libexecdir=$PREFIX/lib \
+        --prefix=${PREFIX} \
+        --host=${TARGET} \
+        --libdir=${PREFIX}/lib \
+        --libexecdir=${PREFIX}/lib \
         --enable-static \
-        --sysconfdir="$(realpath $PREFIX/../etc)"
-    make $PARALLEL_MAKE
+        --sysconfdir="$(realpath ${PREFIX}/../etc)" \
+    make ${PARALLEL_MAKE}
     # package
     if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install-strip
@@ -1287,7 +1287,7 @@ pacman_build() {
         --sysconfdir="$(realpath ${PREFIX}/../etc)" \
         --libdir=$PREFIX/lib \
         --disable-shared
-    make $PARALLEL_MAKE
+    make ${PARALLEL_MAKE}
     # package
     if ((MAKE_INSTALL)); then
         make install-strip
@@ -1347,7 +1347,7 @@ EOF
     make ${PARALLEL_MAKE}
     strip_debug ./src/wget
     if ((CREATE_PACKAGE)); then
-        make DESTDIR=$DEB_PACK install-strip
+        make DESTDIR=${DEB_PACK} install-strip
     fi
     cp ./src/wget ${TOOLS_BIN_DIR}/wget_${DEB_TARGET}
     print_info "You can find it: ${TOOLS_BIN_DIR}/"
@@ -1370,7 +1370,7 @@ tor_build() {
         --with-libevent-dir=$PREFIX \
         --with-zlib-dir=$PREFIX \
         --with-openssl-dir=$PREFIX
-    make $PARALLEL_MAKE
+    make ${PARALLEL_MAKE}
     strip_debug ./src/or/tor
     cp ./src/or/tor ${TOOLS_BIN_DIR}/tor_${DEB_TARGET}
     echo "" > ${TOOLS_BIN_DIR}/torrc
@@ -1391,7 +1391,7 @@ ssh_build() {
         --with-ssl-dir=$PREFIX \
         --enable-strip \
         --enable-static
-    make $PARALLEL_MAKE
+    make ${PARALLEL_MAKE}
     strip_debug ssh
     strip_debug sshd
     strip_debug scp
@@ -1414,7 +1414,7 @@ dropbear_build() {
         --disable-wtmp \
         --disable-utmpx \
         --disable-utmp
-    make $PARALLEL_MAKE
+    make ${PARALLEL_MAKE}
     strip_debug dropbear
     strip_debug dbclient
     cp dropbear ${TOOLS_BIN_DIR}/dropbear_${DEB_TARGET}
@@ -1435,10 +1435,10 @@ python2_build() {
         --build=$MACHTYPE \
         --enable-optimizations \
         --disable-ipv6
-    make $PARALLEL_MAKE
+    make ${PARALLEL_MAKE}
     make install
     if ((CREATE_PACKAGE)); then
-        make DESTDIR=$DEB_PACK install
+        make DESTDIR=${DEB_PACK} install
     fi
     cd ..
 }
@@ -1467,10 +1467,10 @@ python3_build() {
         ac_cv_file__dev_ptmx=no \
         ac_cv_header_bluetooth_bluetooth_h=no \
         ac_cv_header_bluetooth_h=no
-    make $PARALLEL_MAKE
+    make ${PARALLEL_MAKE}
     make install
     if ((CREATE_PACKAGE)); then
-        make DESTDIR=$DEB_PACK install
+        make DESTDIR=${DEB_PACK} install
     fi
     cd ..
 }
@@ -1491,10 +1491,10 @@ rpm_build() {
         --without-selinux \
         --without-hackingdocs \
         $BUILDTARGET
-    make $PARALLEL_MAKE
+    make ${PARALLEL_MAKE}
     make install-strip
     if ((CREATE_PACKAGE)); then
-        make DESTDIR=$DEB_PACK install-strip
+        make DESTDIR=${DEB_PACK} install-strip
     fi
     cd ..
 }
@@ -1518,11 +1518,11 @@ e2tools_build() {
         --prefix=$PREFIX \
         --host=$TARGET \
         $BUILDTARGET
-    make $PARALLEL_MAKE
+    make ${PARALLEL_MAKE}
     strip_debug e2cp
     make install-strip
     if ((CREATE_PACKAGE)); then
-        make DESTDIR=$DEB_PACK install-strip
+        make DESTDIR=${DEB_PACK} install-strip
     fi
     cd ..
 }
@@ -1543,7 +1543,7 @@ joe_build() {
         --host=$TARGET \
         --disable-curses \
         --disable-termcap
-    make $PARALLEL_MAKE
+    make ${PARALLEL_MAKE}
     # package
     strip_debug ./joe/joe
     cp ./joe/joe ${TOOLS_BIN_DIR}/joe_${DEB_TARGET}
@@ -1573,13 +1573,13 @@ gdb_build() {
     done
     # build
     LDFLAGS="${LDFLAGS} -L${PREFIX}/lib" CFLAGS="${CFLAGS} -I${PREFIX}/include" CXXFLAGS=${CFLAGS} CC="$TARGET_CC" CXX="$TARGET_CXX" ../${pkgname}-${pkgver%%[!0-9.]*}*/configure \
-        --host=$TARGET \
-        --target=$TARGET \
+        --host=${TARGET} \
+        --target=${TARGET} \
         --with-system-zlib \
         --without-guile \
         --disable-libada \
         --enable-gdbserver
-    make $PARALLEL_MAKE
+    make ${PARALLEL_MAKE}
     strip_debug ./gdb/gdb
     strip_debug ./gdb/gdbserver/gdbserver
     cp ./gdb/gdb ${TOOLS_BIN_DIR}/gdb_${DEB_TARGET}
@@ -1610,8 +1610,8 @@ distcc_build() {
     # build
     CC="$TARGET_CC" ./configure \
         --prefix=${PREFIX} \
-        --target=$TARGET \
-        --host=$TARGET \
+        --target=${TARGET} \
+        --host=${TARGET} \
         --enable-rfc2553 \
         --mandir=${PREFIX}/share/man \
         --sbindir=${PREFIX}/bin \
