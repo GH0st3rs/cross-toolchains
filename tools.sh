@@ -45,13 +45,20 @@ else
     NC="$(tput sgr 0 2>/dev/null || echo '\e[0m')" # Text Reset
 fi
 
+
+# Local Variables
+MAKE_INSTALL=0
+VERBOSE=0
+CREATE_PACKAGE=0
+
+
 # Set script params
 trap 'err_report $LINENO $BASH_LINENO "$BASH_COMMAND" $(printf "::%s" ${FUNCNAME[@]:-})' ERR
 trap 'restore_output' EXIT
 trap 'previous_command=$this_command; this_command=$BASH_COMMAND' DEBUG
 
 redirect_output() {
-    if [[ -z ${VERBOSE} ]]; then
+    if (( ! VERBOSE )); then
         # Save stdout and stderr
         exec 3>&1
         exec 4>&2
@@ -62,7 +69,7 @@ redirect_output() {
 }
 
 restore_output() {
-    if [[ -z ${VERBOSE} ]]; then
+    if (( ! VERBOSE )); then
         # Restore original stdout
         exec 1>&3 3>&- # Восстановить stdout и закрыть дескр. #3
         exec 2>&4 4>&- # Восстановить stderr и закрыть дескр. #4
@@ -127,7 +134,7 @@ err_report() {
 
 init_logs() {
     export LOGS_DIR=$(mktemp -d)
-    if [[ -z ${VERBOSE} ]]; then
+    if ((! VERBOSE)); then
         ERROR_FILE=${LOGS_DIR}/error.log
         LOG_FILE=${LOGS_DIR}/output.log
         # Clear logs
@@ -204,7 +211,7 @@ init() {
     # if [[ -d $DEB_PACK ]]; then
     #     rm -rf $DEB_PACK
     # fi
-    # if [[ ! -z ${CREATE_DEB} ]]; then
+    # if ((CREATE_PACKAGE)); then
     #     mkdir -p $DEB_PACK
     # fi
 }
@@ -329,10 +336,10 @@ zlib_build() {
         --prefix=${PREFIX} \
         --static
     make $PARALLEL_MAKE
-    if [[ ! -z ${CREATE_DEB} ]]; then
+    if ((CREATE_PACKAGE)); then
         make DESTDIR=${DEB_PACK} install
     fi
-    if [[ ! -z ${MAKE_INSTALL} ]]; then
+    if ((MAKE_INSTALL)); then
         make install
     fi
     cd ..
@@ -377,10 +384,10 @@ openssl_build() {
     make $PARALLEL_MAKE
     strip_debug apps/openssl
     # package
-    if [[ ! -z ${MAKE_INSTALL} ]]; then
+    if ((MAKE_INSTALL)); then
         make install
     fi
-    if [[ ! -z ${CREATE_DEB} ]]; then
+    if ((CREATE_PACKAGE)); then
         # Create DEB
         CC="$TARGET_CC" CXX="$TARGET_CXX" ./Configure \
             $SSL_ARCH \
@@ -422,10 +429,10 @@ libevent_build() {
         --enable-static \
         $BUILDTARGET
     make $PARALLEL_MAKE
-    if [[ ! -z ${CREATE_DEB} ]]; then
+    if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install
     fi
-    if [[ ! -z ${MAKE_INSTALL} ]]; then
+    if ((MAKE_INSTALL)); then
         make install
     fi
     cd ..
@@ -453,10 +460,10 @@ libtasn1_build() {
         $BUILDTARGET
     make $PARALLEL_MAKE
     # package
-    if [[ ! -z ${CREATE_DEB} ]]; then
+    if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install-strip
     fi
-    if [[ ! -z ${MAKE_INSTALL} ]]; then
+    if ((MAKE_INSTALL)); then
         make install-strip
     fi
     cd ..
@@ -516,7 +523,7 @@ libpcap_build() {
         $BUILDTARGET
     make $PARALLEL_MAKE
     make install
-    if [[ ! -z ${CREATE_DEB} ]]; then
+    if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install
     fi
     cd ..
@@ -553,10 +560,10 @@ libarchive_build() {
         $BUILDTARGET
     make $PARALLEL_MAKE
     # package
-    if [[ ! -z ${CREATE_DEB} ]]; then
+    if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install-strip
     fi
-    if [[ ! -z ${MAKE_INSTALL} ]]; then
+    if ((MAKE_INSTALL)); then
         make install-strip
     fi
     cd ..
@@ -584,10 +591,10 @@ e2fsprogs_build() {
         --disable-fsck \
         $BUILDTARGET
     make $PARALLEL_MAKE
-    if [[ ! -z ${CREATE_DEB} ]]; then
+    if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install-libs
     fi
-    if [[ ! -z ${MAKE_INSTALL} ]]; then
+    if ((MAKE_INSTALL)); then
         make install-strip
     fi
     cd ..
@@ -613,10 +620,10 @@ magic_build() {
         --libdir=$PREFIX/lib \
         $BUILDTARGET
     make $PARALLEL_MAKE
-    if [[ ! -z ${CREATE_DEB} ]]; then
+    if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install-strip
     fi
-    if [[ ! -z ${MAKE_INSTALL} ]]; then
+    if ((MAKE_INSTALL)); then
         make install-strip
     fi
     cd ..
@@ -645,10 +652,10 @@ popt_build() {
         --disable-nls \
         $BUILDTARGET
     make $PARALLEL_MAKE
-    if [[ ! -z ${CREATE_DEB} ]]; then
+    if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install
     fi
-    if [[ ! -z ${MAKE_INSTALL} ]]; then
+    if ((MAKE_INSTALL)); then
         make install
     fi
     cd ..
@@ -675,10 +682,10 @@ beecrypt_build() {
         --without-java \
         $BUILDTARGET
     make $PARALLEL_MAKE
-    if [[ ! -z ${CREATE_DEB} ]]; then
+    if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install-strip
     fi
-    if [[ ! -z ${MAKE_INSTALL} ]]; then
+    if ((MAKE_INSTALL)); then
         make install-strip
     fi
     cd ..
@@ -703,7 +710,7 @@ db_build() {
         --enable-static \
         $BUILDTARGET
     make $PARALLEL_MAKE
-    if [[ ! -z ${CREATE_DEB} ]]; then
+    if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install_lib install_include
     fi
     make install_lib install_include
@@ -795,10 +802,10 @@ curl_build() {
     make $PARALLEL_MAKE
     # package
     strip_debug src/curl
-    if [[ ! -z ${CREATE_DEB} ]]; then
+    if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install-strip
     fi
-    if [[ ! -z ${MAKE_INSTALL} ]]; then
+    if ((MAKE_INSTALL)); then
         make install-strip
     fi
     cd ..
@@ -828,10 +835,10 @@ libunistring_build() {
         --enable-static
     make $PARALLEL_MAKE
     # package
-    if [[ ! -z ${CREATE_DEB} ]]; then
+    if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install
     fi
-    if [[ ! -z ${MAKE_INSTALL} ]]; then
+    if ((MAKE_INSTALL)); then
         make install
     fi
     cd ..
@@ -859,10 +866,10 @@ libgpg-error_build() {
         --enable-static
     make $PARALLEL_MAKE
     # package
-    if [[ ! -z ${CREATE_DEB} ]]; then
+    if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install-strip
     fi
-    if [[ ! -z ${MAKE_INSTALL} ]]; then
+    if ((MAKE_INSTALL)); then
         make install-strip
     fi
     cd ..
@@ -890,10 +897,10 @@ libassuan_build() {
         --enable-static
     make $PARALLEL_MAKE
     # package
-    if [[ ! -z ${CREATE_DEB} ]]; then
+    if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install-strip
     fi
-    if [[ ! -z ${MAKE_INSTALL} ]]; then
+    if ((MAKE_INSTALL)); then
         make install-strip
     fi
     cd ..
@@ -921,10 +928,10 @@ gmp_build() {
         --enable-static
     make $PARALLEL_MAKE
     # package
-    if [[ ! -z ${CREATE_DEB} ]]; then
+    if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install-strip
     fi
-    if [[ ! -z ${MAKE_INSTALL} ]]; then
+    if ((MAKE_INSTALL)); then
         make install-strip
     fi
     cd ..
@@ -954,10 +961,10 @@ nettle_build() {
         --disable-shared
     make $PARALLEL_MAKE
     # package
-    if [[ ! -z ${CREATE_DEB} ]]; then
+    if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install
     fi
-    if [[ ! -z ${MAKE_INSTALL} ]]; then
+    if ((MAKE_INSTALL)); then
         make install
     fi
     cd ..
@@ -988,10 +995,10 @@ gnutls_build() {
         --disable-shared
     make
     # package
-    if [[ ! -z ${CREATE_DEB} ]]; then
+    if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install-strip
     fi
-    if [[ ! -z ${MAKE_INSTALL} ]]; then
+    if ((MAKE_INSTALL)); then
         make install-strip
     fi
     cd ..
@@ -1017,10 +1024,10 @@ npth_build() {
         --enable-shared
     make $PARALLEL_MAKE
     # package
-    if [[ ! -z ${CREATE_DEB} ]]; then
+    if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install-strip
     fi
-    if [[ ! -z ${MAKE_INSTALL} ]]; then
+    if ((MAKE_INSTALL)); then
         make install-strip
     fi
     cd ..
@@ -1048,10 +1055,10 @@ libksba_build() {
         --enable-static
     make $PARALLEL_MAKE
     # package
-    if [[ ! -z ${CREATE_DEB} ]]; then
+    if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install-strip
     fi
-    if [[ ! -z ${MAKE_INSTALL} ]]; then
+    if ((MAKE_INSTALL)); then
         make install-strip
     fi
     cd ..
@@ -1088,10 +1095,10 @@ libgcrypt_build() {
         --with-libgpg-error-prefix=$PREFIX
     make $PARALLEL_MAKE
     # package
-    if [[ ! -z ${CREATE_DEB} ]]; then
+    if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install-strip
     fi
-    if [[ ! -z ${MAKE_INSTALL} ]]; then
+    if ((MAKE_INSTALL)); then
         make install-strip
     fi
     cd ..
@@ -1129,10 +1136,10 @@ gnupg_build() {
         --disable-all-tests
     make
     # package
-    if [[ ! -z ${CREATE_DEB} ]]; then
+    if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install-strip
     fi
-    if [[ ! -z ${MAKE_INSTALL} ]]; then
+    if ((MAKE_INSTALL)); then
         make install-strip
     fi
     cd ..
@@ -1166,10 +1173,10 @@ gpgme_build() {
         --with-libassuan-prefix=$PREFIX
     make $PARALLEL_MAKE
     # package
-    if [[ ! -z ${CREATE_DEB} ]]; then
+    if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install-strip
     fi
-    if [[ ! -z ${MAKE_INSTALL} ]]; then
+    if ((MAKE_INSTALL)); then
         make install-strip
     fi
     cd ..
@@ -1194,10 +1201,10 @@ attr_build() {
         --sysconfdir="$(realpath $PREFIX/../etc)"
     make $PARALLEL_MAKE
     # package
-    if [[ ! -z ${CREATE_DEB} ]]; then
+    if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install-strip
     fi
-    if [[ ! -z ${MAKE_INSTALL} ]]; then
+    if ((MAKE_INSTALL)); then
         make install-strip
     fi
     cd ..
@@ -1228,10 +1235,10 @@ libsecret_build() {
         --sysconfdir="$(realpath $PREFIX/../etc)"
     make $PARALLEL_MAKE
     # package
-    if [[ ! -z ${CREATE_DEB} ]]; then
+    if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install-strip
     fi
-    if [[ ! -z ${MAKE_INSTALL} ]]; then
+    if ((MAKE_INSTALL)); then
         make install-strip
     fi
     cd ..
@@ -1282,7 +1289,7 @@ pacman_build() {
         --disable-shared
     make $PARALLEL_MAKE
     # package
-    if [[ ! -z ${MAKE_INSTALL} ]]; then
+    if ((MAKE_INSTALL)); then
         make install-strip
     fi
     cd ..
@@ -1301,10 +1308,10 @@ bzip2_build() {
     make libbz2.a bzip2 bzip2recover CC="$TARGET_CC" AR="${AR}" RANLIB="${RANLIB}" CFLAGS="${CFLAGS}" LDFLAGS="${LDFLAGS}"
     # make -f Makefile-libbz2_so CC="$TARGET_CC" 
     # package
-    if [[ ! -z ${CREATE_DEB} ]]; then
+    if ((CREATE_PACKAGE)); then
         make PREFIX="${DEB_PACK}/${PREFIX}" install
     fi
-    if [[ ! -z ${MAKE_INSTALL} ]]; then
+    if ((MAKE_INSTALL)); then
         make PREFIX="${PREFIX}" install
     fi
     cd ..
@@ -1339,7 +1346,7 @@ EOF
         --sysconfdir="$(realpath ${PREFIX}/../etc)"
     make ${PARALLEL_MAKE}
     strip_debug ./src/wget
-    if [[ ! -z ${CREATE_DEB} ]]; then
+    if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install-strip
     fi
     cp ./src/wget ${TOOLS_BIN_DIR}/wget_${DEB_TARGET}
@@ -1430,7 +1437,7 @@ python2_build() {
         --disable-ipv6
     make $PARALLEL_MAKE
     make install
-    if [[ ! -z ${CREATE_DEB} ]]; then
+    if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install
     fi
     cd ..
@@ -1462,7 +1469,7 @@ python3_build() {
         ac_cv_header_bluetooth_h=no
     make $PARALLEL_MAKE
     make install
-    if [[ ! -z ${CREATE_DEB} ]]; then
+    if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install
     fi
     cd ..
@@ -1486,7 +1493,7 @@ rpm_build() {
         $BUILDTARGET
     make $PARALLEL_MAKE
     make install-strip
-    if [[ ! -z ${CREATE_DEB} ]]; then
+    if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install-strip
     fi
     cd ..
@@ -1514,7 +1521,7 @@ e2tools_build() {
     make $PARALLEL_MAKE
     strip_debug e2cp
     make install-strip
-    if [[ ! -z ${CREATE_DEB} ]]; then
+    if ((CREATE_PACKAGE)); then
         make DESTDIR=$DEB_PACK install-strip
     fi
     cd ..
@@ -1541,7 +1548,7 @@ joe_build() {
     strip_debug ./joe/joe
     cp ./joe/joe ${TOOLS_BIN_DIR}/joe_${DEB_TARGET}
     print_info "You can find it: ${TOOLS_BIN_DIR}/"
-    if [[ ! -z ${MAKE_INSTALL} ]]; then
+    if ((MAKE_INSTALL)); then
         make install
     fi
     cd ..
@@ -1613,7 +1620,7 @@ distcc_build() {
         --without-libiberty
         # --with-gtk
     make WERROR_CFLAGS= INCLUDESERVER_PYTHON=/bin/python
-    if [[ ! -z ${MAKE_INSTALL} ]]; then
+    if ((MAKE_INSTALL)); then
         make INCLUDESERVER_PYTHON=/bin/python install-conf install-program
     fi
     exit
@@ -1626,10 +1633,10 @@ if (! getopts $options opt); then usage; fi
 
 while getopts $options opt; do
     case $opt in
-    i   ) export MAKE_INSTALL=true;;
-    o   ) export TOOLS_BIN_DIR=$OPTARG;;
-    d   ) export CREATE_DEB=true;;
-    v   ) export VERBOSE=true;;
+    i   ) MAKE_INSTALL=1 ;;
+    o   ) export TOOLS_BIN_DIR=$OPTARG ;;
+    d   ) CREATE_PACKAGE=1 ;;
+    v   ) VERBOSE=1 ;;
     a   ) case $OPTARG in
             armel   )
                 export TARGET=${TARGET:=arm-linux-gnueabi}
@@ -1710,7 +1717,7 @@ done
 
 cd ..
 
-if [[ ! -z ${CREATE_DEB} ]]; then
+if ((CREATE_PACKAGE)); then
     print_info "Start create deb package"
     apt-get -y install md5deep fakeroot
     rm -rf $DEB_PACK/DEBIAN
