@@ -239,7 +239,6 @@ export E2FSv=1.43.4
 export LMAGICv=5.31
 export BEECRYPTv=4.1.2
 export LDBv=6.2.23.NC
-export WGETv=1.19
 export TORv=0.3.4.9
 export SSHv=7.4p1
 export DROPBEARv=2017.75
@@ -255,7 +254,6 @@ export E2FSPROGS_LINK=https://www.kernel.org/pub/linux/kernel/people/tytso/e2fsp
 export LMAGIC_LINK=ftp://ftp.astron.com/pub/file/file-$LMAGICv.tar.gz
 export BEECRYPT_LINK=http://prdownloads.sourceforge.net/beecrypt/beecrypt-$BEECRYPTv.tar.gz
 export LDB_LINK=http://download.oracle.com/berkeley-db/db-$LDBv.tar.gz
-export WGET_LINK=http://ftp.gnu.org/gnu/wget/wget-$WGETv.tar.gz
 export TOR_LINK=https://www.torproject.org/dist/tor-$TORv.tar.gz
 export SSH_LINK=http://ftp.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-$SSHv.tar.gz
 export DROPBEAR_LINK=https://matt.ucc.asn.au/dropbear/releases/dropbear-$DROPBEARv.tar.bz2
@@ -328,11 +326,11 @@ zlib_build() {
     print_info "Compile ${pkgname} - ${pkgdesc}"
     cd ${pkgname}-${pkgver}
     CC="$TARGET_CC" ./configure \
-        --prefix=$PREFIX \
+        --prefix=${PREFIX} \
         --static
     make $PARALLEL_MAKE
     if [[ ! -z ${CREATE_DEB} ]]; then
-        make DESTDIR=$DEB_PACK install
+        make DESTDIR=${DEB_PACK} install
     fi
     if [[ ! -z ${MAKE_INSTALL} ]]; then
         make install
@@ -907,7 +905,7 @@ libassuan_build() {
 gmp_build() {
     apt install -y lzip m4 gcc
     local pkgname=gmp
-    local pkgver=6.2.0
+    local pkgver=6.1.2
     local pkgdesc="A free library for arbitrary precision arithmetic"
     local source=https://gmplib.org/download/${pkgname}/${pkgname}-${pkgver}.tar.lz
     download ${source}
@@ -1016,7 +1014,7 @@ npth_build() {
         --host=$TARGET \
         --enable-maintainer-mode \
         --enable-static \
-        --disable-shared
+        --enable-shared
     make $PARALLEL_MAKE
     # package
     if [[ ! -z ${CREATE_DEB} ]]; then
@@ -1314,19 +1312,36 @@ bzip2_build() {
 
 
 wget_build() {
-    download $WGET_LINK
+    apt install texinfo
+    local pkgname=wget
+    local pkgver=1.19
+    local pkgdesc="Network utility to retrieve files from the Web"
+    local source=http://ftp.gnu.org/gnu/wget/${pkgname}-${pkgver}.tar.gz
+    local depends=('zlib' 'openssl')
+    download ${source}
     print_info "Compile ${pkgname} - ${pkgdesc}"
-    mkdir wget-$WGETv-build && cd wget-$WGETv-build
-    LDFLAGS="${LDFLAGS} -static -s" CFLAGS="${CFLAGS} -s -static -O2" CC="$TARGET_CC" ../wget-$WGETv/configure \
+    # prepare
+    cd ${pkgname}-${pkgver}
+  cat >> ../${pkgname}-${pkgver}doc/sample.wgetrc <<EOF
+
+# default root certs location
+ca_certificate=/etc/ssl/certs/ca-certificates.crt
+EOF
+    cd ..
+    # build
+    mkdir ${pkgname}-${pkgver}-build && cd ${pkgname}-${pkgver}-build
+    CC="$TARGET_CC" ../${pkgname}-${pkgver}/configure \
         --prefix=$PREFIX \
         --host=$TARGET \
         --disable-ntlm \
-        --disable-ipv6 \
         --disable-debug \
-        --without-zlib \
-        --without-ssl
-    make $PARALLEL_MAKE
+        --with-ssl=openssl \
+        --sysconfdir="$(realpath ${PREFIX}/../etc)"
+    make ${PARALLEL_MAKE}
     strip_debug ./src/wget
+    if [[ ! -z ${CREATE_DEB} ]]; then
+        make DESTDIR=$DEB_PACK install-strip
+    fi
     cp ./src/wget ${TOOLS_BIN_DIR}/wget_${DEB_TARGET}
     print_info "You can find it: ${TOOLS_BIN_DIR}/"
     cd ..
