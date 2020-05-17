@@ -157,14 +157,15 @@ upgrade_system() {
 init() {
     init_logs
     upgrade_system
-    TOOLCHAIN_DIR=/usr
-    export TARGET_CC="ccache $TARGET-gcc $CFLAGS_FOR_TARGET"
-    export TARGET_CXX="ccache $TARGET-g++ $CFLAGS_FOR_TARGET"
-    export AR=$TARGET-ar
-    export AS=$TARGET-as
-    export RANLIB=$TARGET-ranlib
-    export CFLAGS="${CFLAGS} -s -static -O2 "
-    export LDFLAGS="${LDFLAGS} -s -static "
+
+    local TOOLCHAIN_DIR=/usr
+    export TARGET_CC="ccache ${TARGET}-gcc ${CFLAGS_FOR_TARGET}"
+    export TARGET_CXX="ccache ${TARGET}-g++ ${CFLAGS_FOR_TARGET}"
+    export AR=${TARGET}-ar
+    export AS=${TARGET}-as
+    export RANLIB=${TARGET}-ranlib
+    export CFLAGS="${CFLAGS} -s -O2 "
+    export LDFLAGS="${LDFLAGS} -s "
 
     export USR=$TOOLCHAIN_DIR
     export PREFIX=${PREFIX:=$USR/$TARGET}
@@ -323,6 +324,7 @@ zlib_build() {
     local pkgver=1.2.11
     local pkgdesc="Compression library implementing the deflate compression method found in gzip and PKZIP"
     local source=https://zlib.net/${pkgname}-${pkgver}.tar.gz
+    local pkgdir="/tmp/${pkgname}-${pkgver}"
     download ${source}
     print_info "Compile ${pkgname} - ${pkgdesc}"
     cd ${pkgname}-${pkgver}
@@ -331,7 +333,7 @@ zlib_build() {
         --static
     make ${PARALLEL_MAKE}
     if ((CREATE_PACKAGE)); then
-        make DESTDIR=${DEB_PACK} install
+        make DESTDIR=${pkgdir} install
     fi
     if ((MAKE_INSTALL)); then
         make install
@@ -339,9 +341,7 @@ zlib_build() {
     cd ..
 
     # Test zlib
-    check_lib "zLib" "$(pkg-config --libs --static zlib)"
-    DEB_DESC+="\n .\n zlib-$ZLIBv"
-    TOOLS_NAME+="-zlib"
+    check_lib "zLib" "$(pkg-config --libs --static zlib 2>/dev/null)"
 }
 
 
@@ -351,6 +351,7 @@ openssl_build() {
     local pkgver=1.1.1
     local pkgdesc="The Open Source toolkit for Secure Sockets Layer and Transport Layer Security"
     local source=https://www.openssl.org/source/${pkgname}-${pkgver}.tar.gz
+    local pkgdir="/tmp/${pkgname}-${pkgver}"
     download ${source}
     print_info "Compile ${pkgname} - ${pkgdesc}"
     # prepare
@@ -385,8 +386,8 @@ openssl_build() {
         # Create DEB
         CC="$TARGET_CC" CXX="$TARGET_CXX" ./Configure \
             $SSL_ARCH \
-            --prefix=${DEB_PACK}/${PREFIX} \
-            --openssldir="$(realpath ${DEB_PACK}/${PREFIX}/../etc/ssl)" \
+            --prefix=${pkgdir}/${PREFIX} \
+            --openssldir="$(realpath ${pkgdir}/${PREFIX}/../etc/ssl)" \
             no-shared \
             no-fuzz-afl \
             no-fuzz-libfuzzer \
@@ -400,8 +401,6 @@ openssl_build() {
 
     # Test openssl
     check_lib "OpenSSL" "-lssl -lcrypto"
-    DEB_DESC+="\n .\n openssl-$OPENSSLv"
-    TOOLS_NAME+="-openssl"
 }
 
 
@@ -411,6 +410,7 @@ libevent_build() {
     local pkgdesc="An event notification library"
     local source=https://github.com/${pkgname}/${pkgname}/releases/download/release-${pkgver}/${pkgname}-${pkgver}.tar.gz
     local depends=('openssl')
+    local pkgdir="/tmp/${pkgname}-${pkgver}"
     download ${source}
     print_info "Resolve dependies for ${pkgname}"
     resolve_deps ${depends[@]}
@@ -421,10 +421,10 @@ libevent_build() {
         --with-pic \
         --prefix=${PREFIX} \
         --enable-static \
-        $BUILDTARGET
+        ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
     if ((CREATE_PACKAGE)); then
-        make DESTDIR=$DEB_PACK install
+        make DESTDIR=${pkgdir} install
     fi
     if ((MAKE_INSTALL)); then
         make install
@@ -442,6 +442,7 @@ libtasn1_build() {
     local pkgver=4.12
     local pkgdesc="The ASN.1 library used in GNUTLS"
     local source=http://ftp.gnu.org/gnu/${pkgname}/${pkgname}-${pkgver}.tar.gz
+    local pkgdir="/tmp/${pkgname}-${pkgver}"
     download ${source}
     print_info "Compile ${pkgname} - ${pkgdesc}"
     # build
@@ -451,11 +452,11 @@ libtasn1_build() {
         --host=${TARGET} \
         --disable-doc \
         --enable-static \
-        $BUILDTARGET
+        ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
     # package
     if ((CREATE_PACKAGE)); then
-        make DESTDIR=$DEB_PACK install-strip
+        make DESTDIR=${pkgdir} install-strip
     fi
     if ((MAKE_INSTALL)); then
         make install-strip
@@ -463,8 +464,6 @@ libtasn1_build() {
     cd ..
 
     check_lib "LibTasn1" "-ltasn1"
-    DEB_DESC+="\n .\n libtasn1-$LIBTASN1v"
-    TOOLS_NAME+="-libtasn1"
 }
 
 
@@ -494,11 +493,7 @@ flex_build() {
     cd ..
 
     # Test libfl
-    # echo "void main(){}" > test.c
-    # $TARGET_CC test.c -static -lfl
     check_lib "flex" "-lfl"
-    DEB_DESC+="\n .\n flex-$FLEXv"
-    TOOLS_NAME+="-flex"
 }
 
 
@@ -514,7 +509,7 @@ libpcap_build() {
         --host=$TARGET \
         --with-pcap=linux \
         --disable-shared \
-        $BUILDTARGET
+        ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
     make install
     if ((CREATE_PACKAGE)); then
@@ -523,11 +518,7 @@ libpcap_build() {
     cd ..
 
     # Test libpcap
-    # echo "void main(){}" > test.c
-    # $TARGET_CC test.c -lpcap -static
     check_lib "LibPCAP" "-lpcap"
-    DEB_DESC+="\n .\n libpcap-$LIBPCAPv"
-    TOOLS_NAME+="-libpcap"
 }
 
 # Not tested for deb
@@ -536,7 +527,8 @@ libarchive_build() {
     local pkgver=3.3.2
     local pkgdesc="Multi-format archive and compression library"
     local source=https://www.libarchive.org/downloads/${pkgname}-${pkgver}.tar.gz
-    local depends=('zlib' 'attr')
+    local depends=('acl' 'zlib' 'attr' 'openssl')
+    local pkgdir="/tmp/${pkgname}-${pkgver}"
     download ${source}
     print_info "Resolve dependies for ${pkgname}"
     resolve_deps ${depends[@]}
@@ -549,13 +541,13 @@ libarchive_build() {
         --enable-static \
         --without-xml2 \
         --without-lzma \
-        --without-openssl \
         --with-zlib \
-        $BUILDTARGET
+        --without-nettle \
+        ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
     # package
     if ((CREATE_PACKAGE)); then
-        make DESTDIR=$DEB_PACK install-strip
+        make DESTDIR=${pkgdir} install-strip
     fi
     if ((MAKE_INSTALL)); then
         make install-strip
@@ -563,8 +555,6 @@ libarchive_build() {
     cd ..
 
     check_lib "libArchive" "-larchive"
-    DEB_DESC+="\n .\n libarchive-$LIBARCHIVEv"
-    TOOLS_NAME+="-libarchive"
 }
 
 
@@ -583,7 +573,7 @@ e2fsprogs_build() {
         --disable-debugfs \
         --disable-testio-debug \
         --disable-fsck \
-        $BUILDTARGET
+        ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
     if ((CREATE_PACKAGE)); then
         make DESTDIR=${DEB_PACK} install-libs
@@ -612,7 +602,7 @@ magic_build() {
         --enable-static \
         --includedir=$PREFIX/include \
         --libdir=$PREFIX/lib \
-        $BUILDTARGET
+        ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
     if ((CREATE_PACKAGE)); then
         make DESTDIR=${DEB_PACK} install-strip
@@ -623,11 +613,7 @@ magic_build() {
     cd ..
 
     # Test libmagic
-    echo "void main(){}" > test.c
-    $TARGET_CC test.c -static -lmagic -lz
-    check_lib "libmagic"
-    DEB_DESC+="\n .\n file-$LMAGICv"
-    TOOLS_NAME+="-file"
+    check_lib "libmagic" "-lmagic -lz"
 }
 
 
@@ -636,6 +622,7 @@ popt_build() {
     local pkgver=1.16
     local pkgdesc="A commandline option parser"
     local source="https://deb.debian.org/debian/pool/main/p/${pkgname}/${pkgname}_${pkgver}.orig.tar.gz"
+    local pkgdir="/tmp/${pkgname}-${pkgver}"
     download ${source}
     print_info "Compile ${pkgname} - ${pkgdesc}"
     mkdir ${pkgname}-${pkgver}-build && cd ${pkgname}-${pkgver}-build
@@ -644,10 +631,10 @@ popt_build() {
         --host=${TARGET} \
         --enable-static \
         --disable-nls \
-        $BUILDTARGET
+        ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
     if ((CREATE_PACKAGE)); then
-        make DESTDIR=$DEB_PACK install
+        make DESTDIR=${pkgdir} install
     fi
     if ((MAKE_INSTALL)); then
         make install
@@ -655,11 +642,7 @@ popt_build() {
     cd ..
 
     # Test libpopt
-    # echo "void main(){}" > test.c
-    # $TARGET_CC test.c -static -lpopt
     check_lib "libpopt" "-lpopt"
-    DEB_DESC+="\n .\n popt-$POPTv"
-    TOOLS_NAME+="-popt"
 }
 
 
@@ -674,7 +657,7 @@ beecrypt_build() {
         --enable-openmp \
         --disable-debug \
         --without-java \
-        $BUILDTARGET
+        ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
     if ((CREATE_PACKAGE)); then
         make DESTDIR=${DEB_PACK} install-strip
@@ -702,7 +685,7 @@ db_build() {
         --host=$TARGET \
         --disable-java \
         --enable-static \
-        $BUILDTARGET
+        ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
     if ((CREATE_PACKAGE)); then
         make DESTDIR=${DEB_PACK} install_lib install_include
@@ -753,6 +736,7 @@ curl_build() {
     local pkgdesc="An URL retrieval utility and library"
     local source=https://curl.haxx.se/download/${pkgname}-${pkgver}.tar.gz
     local depends=('zlib' 'openssl' 'ca-certificates')
+    local pkgdir="/tmp/${pkgname}-${pkgver}"
     download ${source}
     print_info "Resolve dependies for ${pkgname}"
     resolve_deps ${depends[@]}
@@ -797,7 +781,7 @@ curl_build() {
     # package
     strip_debug src/curl
     if ((CREATE_PACKAGE)); then
-        make DESTDIR=$DEB_PACK install-strip
+        make DESTDIR=${pkgdir} install-strip
     fi
     if ((MAKE_INSTALL)); then
         make install-strip
@@ -805,8 +789,6 @@ curl_build() {
     cd ..
 
     check_lib "libCURL" "-lcurl"
-    DEB_DESC+="\n .\n curl-$CURLv"
-    TOOLS_NAME+="-curl"
 }
 
 
@@ -816,6 +798,7 @@ libunistring_build() {
     local pkgver=0.9.10
     local pkgdesc="Library for manipulating Unicode strings and C strings"
     local source=https://ftp.gnu.org/gnu/$pkgname/${pkgname}-${pkgver}.tar.xz
+    local pkgdir="/tmp/${pkgname}-${pkgver}"
     download ${source}
     print_info "Compile ${pkgname} - ${pkgdesc}"
     # prepare
@@ -826,11 +809,12 @@ libunistring_build() {
     CC="$TARGET_CC" ../${pkgname}-${pkgver}/configure \
         --prefix=${PREFIX} \
         --host=${TARGET} \
-        --enable-static
+        --enable-static \
+        ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
     # package
     if ((CREATE_PACKAGE)); then
-        make DESTDIR=$DEB_PACK install
+        make DESTDIR=${pkgdir} install
     fi
     if ((MAKE_INSTALL)); then
         make install
@@ -842,11 +826,12 @@ libunistring_build() {
 
 
 libgpg-error_build() {
-    apt install -y autoconf automake autopoint libtool
+    apt install -y autoconf automake autopoint libtool gcc
     local pkgname=libgpg-error
     local pkgver=1.37
     local pkgdesc="Support library for libgcrypt"
     local source=ftp://ftp.gnupg.org/gcrypt/libgpg-error/${pkgname}-${pkgver}.tar.bz2
+    local pkgdir="/tmp/${pkgname}-${pkgver}"
     download ${source}
     print_info "Compile ${pkgname} - ${pkgdesc}"
     # prepare
@@ -857,11 +842,12 @@ libgpg-error_build() {
         --prefix=${PREFIX} \
         --host=${TARGET} \
         --disable-doc \
-        --enable-static
+        --enable-static \
+        ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
     # package
     if ((CREATE_PACKAGE)); then
-        make DESTDIR=$DEB_PACK install-strip
+        make DESTDIR=${pkgdir} install-strip
     fi
     if ((MAKE_INSTALL)); then
         make install-strip
@@ -878,6 +864,7 @@ libassuan_build() {
     local pkgdesc="IPC library used by some GnuPG related software"
     local source="https://gnupg.org/ftp/gcrypt/${pkgname}/${pkgname}-${pkgver}.tar.bz2"
     local depends=('libgpg-error')
+    local pkgdir="/tmp/${pkgname}-${pkgver}"
     download ${source}
     print_info "Resolve dependies for ${pkgname}"
     resolve_deps ${depends[@]}
@@ -888,11 +875,12 @@ libassuan_build() {
         --prefix=${PREFIX} \
         --host=${TARGET} \
         --disable-doc \
-        --enable-static
+        --enable-static \
+        ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
     # package
     if ((CREATE_PACKAGE)); then
-        make DESTDIR=$DEB_PACK install-strip
+        make DESTDIR=${pkgdir} install-strip
     fi
     if ((MAKE_INSTALL)); then
         make install-strip
@@ -909,6 +897,7 @@ gmp_build() {
     local pkgver=6.1.2
     local pkgdesc="A free library for arbitrary precision arithmetic"
     local source=https://gmplib.org/download/${pkgname}/${pkgname}-${pkgver}.tar.lz
+    local pkgdir="/tmp/${pkgname}-${pkgver}"
     download ${source}
     print_info "Compile ${pkgname} - ${pkgdesc}"
     # build
@@ -919,11 +908,12 @@ gmp_build() {
         --enable-cxx \
         --enable-fat \
         --build=${MACHTYPE} \
-        --enable-static
+        --enable-static \
+        ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
     # package
     if ((CREATE_PACKAGE)); then
-        make DESTDIR=$DEB_PACK install-strip
+        make DESTDIR=${pkgdir} install-strip
     fi
     if ((MAKE_INSTALL)); then
         make install-strip
@@ -941,6 +931,7 @@ nettle_build() {
     local pkgdesc="A low-level cryptographic library"
     local source=https://ftp.gnu.org/gnu/$pkgname/$pkgname-$pkgver.tar.gz
     local depends=('gmp')
+    local pkgdir="/tmp/${pkgname}-${pkgver}"
     download ${source}
     print_info "Resolve dependies for ${pkgname}"
     resolve_deps ${depends[@]}
@@ -952,18 +943,18 @@ nettle_build() {
         --host=${TARGET} \
         --enable-mini-gmp \
         --enable-static \
-        --disable-shared
+        ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
     # package
     if ((CREATE_PACKAGE)); then
-        make DESTDIR=$DEB_PACK install
+        make DESTDIR=${pkgdir} install
     fi
     if ((MAKE_INSTALL)); then
         make install
     fi
     cd ..
 
-    check_lib "libnettle" "$(pkg-config --libs --static hogweed)"
+    check_lib "libnettle" "$(pkg-config --libs --static hogweed 2>/dev/null)"
 }
 
 
@@ -974,6 +965,7 @@ gnutls_build() {
     local pkgdesc="A library which provides a secure layer over a reliable transport layer"
     local source=https://www.gnupg.org/ftp/gcrypt/gnutls/v3.6/${pkgname}-${pkgver}.tar.xz
     local depends=('libtasn1' 'zlib' 'nettle' 'libunistring' 'libassuan')
+    local pkgdir="/tmp/${pkgname}-${pkgver}"
     download ${source}
     print_info "Resolve dependies for ${pkgname}"
     resolve_deps ${depends[@]}
@@ -986,11 +978,11 @@ gnutls_build() {
         --without-p11-kit \
         --disable-doc \
         --enable-static \
-        --disable-shared
+        ${CONFIGURE_ARGS[@]}
     make
     # package
     if ((CREATE_PACKAGE)); then
-        make DESTDIR=$DEB_PACK install-strip
+        make DESTDIR=${pkgdir} install-strip
     fi
     if ((MAKE_INSTALL)); then
         make install-strip
@@ -1006,6 +998,7 @@ npth_build() {
     local pkgver=1.6
     local pkgdesc="New portable threads library"
     local source=ftp://ftp.gnupg.org/gcrypt/${pkgname}/${pkgname}-${pkgver}.tar.bz2
+    local pkgdir="/tmp/${pkgname}-${pkgver}"
     download ${source}
     print_info "Compile ${pkgname} - ${pkgdesc}"
     # build
@@ -1015,11 +1008,11 @@ npth_build() {
         --host=${TARGET} \
         --enable-maintainer-mode \
         --enable-static \
-        --enable-shared
+        ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
     # package
     if ((CREATE_PACKAGE)); then
-        make DESTDIR=$DEB_PACK install-strip
+        make DESTDIR=${pkgdir} install-strip
     fi
     if ((MAKE_INSTALL)); then
         make install-strip
@@ -1037,6 +1030,7 @@ libksba_build() {
     local pkgdesc="A CMS and X.509 access library"
     local source=https://www.gnupg.org/ftp/gcrypt/$pkgname/$pkgname-$pkgver.tar.bz2
     local depends=('libgpg-error')
+    local pkgdir="/tmp/${pkgname}-${pkgver}"
     download ${source}
     print_info "Resolve dependies for ${pkgname}"
     resolve_deps ${depends[@]}
@@ -1046,11 +1040,12 @@ libksba_build() {
     CC="$TARGET_CC" ../${pkgname}-${pkgver}/configure \
         --prefix=${PREFIX} \
         --host=${TARGET} \
-        --enable-static
+        --enable-static \
+        ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
     # package
     if ((CREATE_PACKAGE)); then
-        make DESTDIR=$DEB_PACK install-strip
+        make DESTDIR=${pkgdir} install-strip
     fi
     if ((MAKE_INSTALL)); then
         make install-strip
@@ -1068,6 +1063,7 @@ libgcrypt_build() {
     local pkgdesc="General purpose cryptographic library based on the code from GnuPG"
     local source=https://gnupg.org/ftp/gcrypt/${pkgname}/${pkgname}-${pkgver}.tar.bz2
     local depends=('libgpg-error')
+    local pkgdir="/tmp/${pkgname}-${pkgver}"
     download ${source}
     print_info "Resolve dependies for ${pkgname}"
     resolve_deps ${depends[@]}
@@ -1086,11 +1082,12 @@ libgcrypt_build() {
         --disable-doc \
         --disable-padlock-support \
         --enable-static \
-        --with-libgpg-error-prefix=$PREFIX
+        --with-libgpg-error-prefix=${PREFIX} \
+        ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
     # package
     if ((CREATE_PACKAGE)); then
-        make DESTDIR=$DEB_PACK install-strip
+        make DESTDIR=${pkgdir} install-strip
     fi
     if ((MAKE_INSTALL)); then
         make install-strip
@@ -1108,6 +1105,7 @@ gnupg_build() {
     local pkgdesc="Complete and free implementation of the OpenPGP standard"
     local source=https://gnupg.org/ftp/gcrypt/${pkgname}/${pkgname}-${pkgver}.tar.bz2
     local depends=('bzip2' 'npth' 'libgcrypt' 'libksba' 'libassuan' 'gnutls')
+    local pkgdir="/tmp/${pkgname}-${pkgver}"
     download ${source}
     print_info "Resolve dependies for ${pkgname}"
     resolve_deps ${depends[@]}
@@ -1127,11 +1125,12 @@ gnupg_build() {
         --sysconfdir="$(realpath ${PREFIX}/../etc)" \
         --sbindir=${PREFIX}/bin \
         --libexecdir=${PREFIX}/lib/gnupg \
-        --disable-all-tests
+        --disable-all-tests \
+        ${CONFIGURE_ARGS[@]}
     make
     # package
     if ((CREATE_PACKAGE)); then
-        make DESTDIR=$DEB_PACK install-strip
+        make DESTDIR=${pkgdir} install-strip
     fi
     if ((MAKE_INSTALL)); then
         make install-strip
@@ -1147,6 +1146,7 @@ gpgme_build() {
     local pkgdesc="A C wrapper library for GnuPG"
     local source=https://www.gnupg.org/ftp/gcrypt/${pkgbase}/${pkgbase}-${pkgver}.tar.bz2
     local depends=('gnupg' 'libgpg-error')
+    local pkgdir="/tmp/${pkgname}-${pkgver}"
     download ${source}
     print_info "Resolve dependies for ${pkgbase}"
     resolve_deps ${depends[@]}
@@ -1165,10 +1165,11 @@ gpgme_build() {
         --disable-gpgsm-test \
         --disable-fd-passing \
         --with-libassuan-prefix=${PREFIX} \
+        ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
     # package
     if ((CREATE_PACKAGE)); then
-        make DESTDIR=$DEB_PACK install-strip
+        make DESTDIR=${pkgdir} install-strip
     fi
     if ((MAKE_INSTALL)); then
         make install-strip
@@ -1182,6 +1183,7 @@ attr_build() {
     local pkgver=2.4.48
     local pkgdesc="Extended attribute support library for ACL support"
     local source=https://download.savannah.gnu.org/releases/${pkgname}/${pkgname}-${pkgver}.tar.gz
+    local pkgdir="/tmp/${pkgname}-${pkgver}"
     download ${source}
     print_info "Compile ${pkgname} - ${pkgdesc}"
     # build
@@ -1193,10 +1195,11 @@ attr_build() {
         --libexecdir=${PREFIX}/lib \
         --enable-static \
         --sysconfdir="$(realpath ${PREFIX}/../etc)" \
+        ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
     # package
     if ((CREATE_PACKAGE)); then
-        make DESTDIR=$DEB_PACK install-strip
+        make DESTDIR=${pkgdir} install-strip
     fi
     if ((MAKE_INSTALL)); then
         make install-strip
@@ -1214,6 +1217,7 @@ libsecret_build() {
     local _commit=fb456a3853a080996f044496b11f3001af4a2659
     local source=https://gitlab.gnome.org/GNOME/libsecret/-/archive/${_commit}/libsecret-${_commit}.tar.gz
     local depends=(libgcrypt)
+    local pkgdir="/tmp/${pkgname}-${pkgver}"
     download ${source}
     print_info "Resolve dependies for ${pkgname}"
     resolve_deps ${depends[@]}
@@ -1227,10 +1231,11 @@ libsecret_build() {
         --libexecdir=${PREFIX}/lib \
         --enable-static \
         --sysconfdir="$(realpath ${PREFIX}/../etc)" \
+        ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
     # package
     if ((CREATE_PACKAGE)); then
-        make DESTDIR=$DEB_PACK install-strip
+        make DESTDIR=${pkgdir} install-strip
     fi
     if ((MAKE_INSTALL)); then
         make install-strip
@@ -1440,12 +1445,12 @@ python2_build() {
 # Python3 build
 python3_build() {
     local pkgname=python
-    local pkgver=3.8.1
+    local pkgver=3.4.6
     local pkgdesc=""
     local source="https://www.python.org/ftp/python/${pkgver}/Python-${pkgver}.tar.xz"
     download ${source}
     print_info "Compile ${pkgname} - ${pkgdesc}"
-    mkdir python-${pkgver}-build && cd python-${pkgver}-build
+    mkdir ${pkgname}-${pkgver}-build && cd ${pkgname}-${pkgver}-build
     CC="$TARGET_CC" CXX="$TARGET_CXX" ../Python-${pkgver}/configure \
         --prefix=$PREFIX \
         --target=$TARGET \
@@ -1456,7 +1461,7 @@ python3_build() {
         --without-cxx-main \
         --enable-shared --sysconfdir=/opt/etc \
         --with-computed-gotos \
-        --enable-optimizations \
+        --disable-ipv6 \
         ac_cv_file__dev_ptc=no \
         ac_cv_file__dev_ptmx=no \
         ac_cv_header_bluetooth_bluetooth_h=no \
