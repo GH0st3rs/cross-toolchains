@@ -1,5 +1,5 @@
 # cross-toolchains
-Script for build cross-toolchain for ARMEL, ARMBE, MIPSEL, MIPS, PowerPC, TileGX, i686
+Script for build cross-toolchain for ARMEL, ARMBE, MIPSEL, MIPS, PowerPC, i686
 
 
 ## Docker enviroment variables
@@ -9,8 +9,6 @@ For use that variables, set them with `--build-arg`
 * TARGET - Set custom target for toolchain
 
 * CFLAGS_FOR_TARGET - Set CFLAGS for build taret binaries
-
-* CPPFLAGS_FOR_TARGET - Set custom CFLAGS for build taret binaries
 
 * GCC_PARAMS - Set custom flags for build target GCC
 
