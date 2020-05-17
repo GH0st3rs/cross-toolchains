@@ -184,14 +184,12 @@ init() {
     if [[ -z ${DEB_PACK} ]]; then
         export DEB_PACK=$(pwd)/${DEB_TARGET}_tools_v${DEBv}_${DEB_ARCH}
     fi
-    export TMP_BUILD_DIR=${WORK_DIRECTORY}/${DEB_TARGET}-cross
-    if [[ -z ${TOOLS_BIN_DIR} ]]; then
-        export TOOLS_BIN_DIR=$(mktemp -d)/BIN
-    fi
+    export TMP_BUILD_DIR=${WORK_DIRECTORY}/${TARGET_ARCH}-cross
+    export TOOLS_BIN_DIR=${TOOLS_BIN_DIR:=$(mktemp -d)/BIN}
     if [[ $1 == i686 ]]; then
-        export BUILDTARGET="--build=$TARGET"
+        export CONFIGURE_ARGS=${CONFIGURE_ARGS:="--build=$TARGET"}
     else
-        export BUILDTARGET=""
+        export CONFIGURE_ARGS=${CONFIGURE_ARGS:=""}
     fi
     export DEB_DESC="Description: Tools for $DEB_TARGET toolchain"
     export TOOLS_NAME="$DEB_TARGET"
@@ -220,15 +218,13 @@ usage() {
     init_logs
     restore_output
 cat << EOF
-usage: args.py [-h] [-i] [-o DIR] [-d] [-v] -a ARCH [-l LIBS] [-t TOOLS]
+usage: args.py [-h] [-i] [-o DIR] [-d] [-v] -a ARCH [-p PACKETS] [-l]
 
 optional arguments:
   -h, --help      Show this help message and exit
   -a ARCH         Target Architecture: ($(echo ${ARCHS[*]}|sed 's/ /, /g'))
-  -t TOOLS        Compile selected tools:
-                  $(echo ${TOOLS[*]}|sed 's/ /\n                  /g')
-  -l LIBS         Compile selected libs:
-                  $(echo ${LIBS[*]}|sed 's/ /\n                  /g')
+  -p PACKAGE      Package[s] for install
+  -l              List of available packages
   -i              Run "make install" for selected tools
   -o DIR          Binary output directory
   -d              Create DEB package
@@ -271,8 +267,6 @@ export EMPTY_LINK=https://downloads.sourceforge.net/project/empty/empty/empty-$E
 
 
 ARCHS=(armel armbe mipsel mips i686 powerpc)
-TOOLS=(wget tor ssh dropbear python2 python3 rpm e2tools empty joe gdb)
-LIBS=(zlib openssl libtasn1 libevent libpcap flex libmagic e2fsprogs libdb curl libunistring libassuan libgpg-error libgnutls)
 # redirect_output
 
 
@@ -364,9 +358,9 @@ openssl_build() {
     # Patch ssl dir to /etc/ssl
     sed -i "s|./demoCA|$(realpath ${PREFIX}/../etc/ssl)|g" ./apps/*.{cnf,in}
     # build
-    if [[ ${PREFIX_TARCH} == i686 ]]; then
+    if [[ ${TARGET_ARCH} == i686 ]]; then
         local EXTRA_FLAGS="-m32"
-    elif [[ ${PREFIX_TARCH} == powerpc ]]; then
+    elif [[ ${TARGET_ARCH} == powerpc ]]; then
         local EXTRA_FLAGS=""
     else
         local EXTRA_FLAGS="-march=${SSL_MARCH} -lpthread"
@@ -734,7 +728,7 @@ ca-certificates_build() {
     local source=https://git.archlinux.org/svntogit/packages.git/plain/trunk/update-ca-trust?h=packages/ca-certificates
     print_info "Compile ${pkgname} - ${pkgdesc}"
     # build
-    pushd $(mktemp -d)
+    cd $(mktemp -d)
     wget ${source} --no-check-certificate -O update-ca-trust
     sed -ir "s|/etc|$(realpath ${PREFIX}/../etc)|" update-ca-trust
     # package
@@ -749,7 +743,7 @@ ca-certificates_build() {
     # Compatiblity link for legacy bundle
     ln -sr "${PREFIX}/../etc/${pkgbase}/extracted/tls-ca-bundle.pem" "${PREFIX}/../etc/ssl/certs/ca-certificates.crt"
     ${PREFIX}/bin/update-ca-trust
-    popd
+    cd ..
 }
 
 
@@ -1628,7 +1622,8 @@ distcc_build() {
 }
 
 
-options="ho:a:t:l:idv"
+# Parse args
+options="ho:a:p:idvl"
 if (! getopts $options opt); then usage; fi
 
 while getopts $options opt; do
@@ -1670,75 +1665,29 @@ while getopts $options opt; do
                 ;;
             *       ) usage ;;
         esac
-        export PREFIX_TARCH=$OPTARG
-        init $PREFIX_TARCH;;
-    l   ) for lib in $OPTARG; do
-            case $lib in
-                openssl      )  openssl_build $PREFIX_TARCH ;;
-                zlib         )  zlib_build ;;
-                libtasn1     )  libtasn1_build ;;
-                libevent     )  libevent_build ;;
-                libpcap      )  libpcap_build ;;
-                flex         )  flex_build $PREFIX_TARCH ;;
-                libarchive   )  libarchive_build ;;
-                e2fsprogs    )  e2fsprogs_build ;;
-                libmagic     )  magic_build ;;
-                libpopt      )  popt_build ;;
-                libdb        )  db_build ;;
-                curl         )  curl_build ;;
-                libunistring )  libunistring_build ;;
-                libassuan    )  libassuan_build ;;
-                libgpg-error )  libgpg-error_build ;;
-                gnutls       )  gnutls_build ;;
-                gpgme        )  gpgme_build ;;
-                *            )  ${lib}_build ;; # usage ;;
-            esac
-        done
-        TOOLS_NAME+="-libs" ;;
-    t   ) for item in $OPTARG; do
-            case $item in
-                wget     )  wget_build ;;
-                tor      )  tor_build ;;
-                ssh      )  ssh_build ;;
-                dropbear )  dropbear_build ;;
-                python2  )  python2_build ;;
-                python3  )  python3_build ;;
-                rpm      )  rpm_build ;;
-                e2tools  )  e2tools_build ;;
-                empty    )  empty_build ;;
-                joe      )  joe_build ;;
-                gdb      )  gdb_build ;;
-                *        )  usage ;;
-            esac
-        done ;;
-    h|* ) usage;;
+        export TARGET_ARCH=$OPTARG
+        ;;
+    p   ) export LIST_OF_INSTALL_PACKAGES=${OPTARG[@]} ;;
+    l   ) 
+        packages=$(declare -F|grep -oP "[0-9a-zA-Z\-]*_build"|sed 's|_build||')
+        print_info "Available packages:"
+        echo -e " $(echo ${packages[*]}|sed 's/ /\n /g')"
+        exit 0
+        ;;
+    h|* ) usage ;;
     esac
 done
 
+
+init ${TARGET_ARCH}
+# Compile packages
+for pkg in ${LIST_OF_INSTALL_PACKAGES[@]}; do
+    resolve_deps ${pkg}
+done
+
+
 cd ..
 
-if ((CREATE_PACKAGE)); then
-    print_info "Start create deb package"
-    apt-get -y install md5deep fakeroot
-    rm -rf $DEB_PACK/DEBIAN
-    rm -rf $DEB_PACK/usr/share
-    mkdir -p $DEB_PACK/DEBIAN
-    TOOL_DIR=$(echo $DEB_PACK|sed -e "s|$(pwd)/||")
-    # NAME=$(echo $TOOL_DIR|sed 's/_/-/g')
-    echo "Package: $TOOLS_NAME" >> $DEB_PACK/DEBIAN/control
-    echo "Version: ${DEBv}" >> $DEB_PACK/DEBIAN/control
-    echo "Architecture: ${DEB_ARCH}" >> $DEB_PACK/DEBIAN/control
-    echo "Maintainer: Admin" >> $DEB_PACK/DEBIAN/control
-    echo "Priority: optional" >> $DEB_PACK/DEBIAN/control
-    echo "Installed-Size: $(du -s $DEB_PACK/usr|awk '{print $1}')" >> $DEB_PACK/DEBIAN/control
-    echo "Section: devel" >> $DEB_PACK/DEBIAN/control
-    echo "Depends: make, autoconf, libtool" >> $DEB_PACK/DEBIAN/control
-    echo -e $DEB_DESC >> $DEB_PACK/DEBIAN/control
-
-    md5deep -l -o f -r $DEB_PACK/usr > $DEB_PACK/DEBIAN/md5sums
-    fakeroot dpkg-deb --build $TOOL_DIR
-    print_success "Tools was packed into the deb package $TOOL_DIR.deb"
-fi
 
 print_info "Remove unneeded files"
 apt-get autoremove -y --purge md5deep fakeroot libfile-dircompare-perl gcc g++ >/dev/null
