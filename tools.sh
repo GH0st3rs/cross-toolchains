@@ -1159,10 +1159,11 @@ gpgme_build() {
     print_info "Compile ${pkgbase} - ${pkgdesc}"
     # prepare
     mkdir ${pkgbase}-${pkgver}-build && cd ${pkgbase}-${pkgver}-build
-    # Because need libassaun
+    # Fix undefined reference
     sed -ri 's|(gpgme_json_LDADD = -lm libgpgme.la \$\()GPG_ERROR_LIBS\)|\1LIBASSUAN_LIBS\)|' ../${pkgbase}-${pkgver}/src/Makefile.*
     sed -ri 's|(LIBS = @LIBS@)|\1 @LIBASSUAN_LIBS@|' ../${pkgbase}-${pkgver}/tests/Makefile.*
-    sed -ri 's|^(LIBS = )$|\1\$\(LIBASSUAN_LIBS\)|' ../${pkgbase}-${pkgver}/lang/cpp/tests/Makefile*
+    sed -ri 's|(LIBS = @LIBS@)|\1 @LIBASSUAN_LIBS@|' ../${pkgbase}-${pkgver}/tests/*/Makefile.*
+    sed -ri 's|(LIBS = @LIBS@)|\1 @LIBASSUAN_LIBS@|' ../${pkgbase}-${pkgver}/lang/cpp/tests/Makefile*
     # build
     CC="$TARGET_CC" CXX="$TARGET_CXX" ../${pkgbase}-${pkgver}/configure \
         --prefix=${PREFIX} \
@@ -1170,7 +1171,6 @@ gpgme_build() {
         --enable-static \
         --disable-gpgsm-test \
         --disable-fd-passing \
-        --with-libassuan-prefix=${PREFIX} \
         ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
     # package
@@ -1302,6 +1302,7 @@ pacman_build() {
         "https://git.archlinux.org/svntogit/packages.git/plain/trunk/makepkg.conf?h=packages/pacman"
     )
     local depends=('libarchive' 'curl' 'gpgme')
+    local pkgdir="/tmp/${pkgname}-${pkgver}"
     download ${source}
     print_info "Resolve dependies for ${pkgname}"
     resolve_deps ${depends[@]}
@@ -1315,19 +1316,22 @@ pacman_build() {
     patch -Np1 < makepkg-fix-one-more-file-seccomp-issue.patch
     sed -ri 's|(<string.h>)|\1\n#include <bits/posix2_lim.h>|' ./*/*/util.h
     # build
-    PKG_CONFIG="/usr/bin/pkg-config --static" LDFLAGS="${LDFLAGS} -Wl,-static" BASH_SHELL=/bin/bash CC="$TARGET_CC" ./configure \
-        --prefix=$PREFIX \
-        --host=$TARGET \
+    PKG_CONFIG="/usr/bin/pkg-config --static" BASH_SHELL=/bin/bash CC="$TARGET_CC" ./configure \
+        --prefix=${PREFIX} \
+        --host=${TARGET} \
         --with-gpgme \
         --with-libcurl \
         --disable-doc \
         --enable-static \
         --localstatedir="$(realpath_d ${PREFIX}/../var)" \
         --sysconfdir="$(realpath_d ${PREFIX}/../etc)" \
-        --libdir=$PREFIX/lib \
+        --libdir=${PREFIX}/lib \
         --disable-shared
     make ${PARALLEL_MAKE}
     # package
+    if ((CREATE_PACKAGE)); then
+        make DESTDIR=${pkgdir} install-strip
+    fi
     if ((MAKE_INSTALL)); then
         make install-strip
     fi
