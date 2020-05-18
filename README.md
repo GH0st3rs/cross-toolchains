@@ -10,11 +10,22 @@ For use that variables, set them with `--build-arg`
 
 * CFLAGS_FOR_TARGET - Set CFLAGS for build taret binaries
 
+* CXXFLAGS_FOR_TARGET - Set CXXFLAGS for build taret binaries
+
 * GCC_PARAMS - Set custom flags for build target GCC
 
 * GLIBC_EX_FLAGS - Set custom flags for build target glibc
 
 * SSL_MARCH - Set custom -march for build target openssl
+
+For example:
+
+```bash
+docker build -t mipsel-linux-gnu \
+    --build-arg ARCH=mipsel \
+    --build-arg GCC_PARAMS="--with-float=soft" \
+    .
+```
 
 ### Execute post scripts
 

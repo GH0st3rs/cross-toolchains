@@ -138,36 +138,42 @@ if [[ ${BUILD_ARCH} == mipsel ]]; then
     export TARGET=${TARGET:=mipsel-linux-gnu}
     export KERNEL_ARCH=mips
     export CFLAGS_FOR_TARGET=${CFLAGS_FOR_TARGET:="-O2 -pipe -msoft-float"}
+    export CXXFLAGS_FOR_TARGET=${CXXFLAGS_FOR_TARGET:=$CFLAGS_FOR_TARGET}
     export GCC_PARAMS=${GCC_PARAMS:="--with-float=soft --enable-install-libiberty"}
     export GLIBC_EX_FLAGS=${GLIBC_EX_FLAGS:="--without-fp"}
 elif [[ ${BUILD_ARCH} == mips ]]; then
     export TARGET=${TARGET:=mips-linux-gnu}
     export KERNEL_ARCH=mips
     export CFLAGS_FOR_TARGET=${CFLAGS_FOR_TARGET:=""}
+    export CXXFLAGS_FOR_TARGET=${CXXFLAGS_FOR_TARGET:=$CFLAGS_FOR_TARGET}
     export GCC_PARAMS=${GCC_PARAMS:=""}
     export GLIBC_EX_FLAGS=${GLIBC_EX_FLAGS:=""}
 elif [[ ${BUILD_ARCH} == armel ]]; then
     export TARGET=${TARGET:=arm-linux-gnueabi}
     export KERNEL_ARCH=arm
     export CFLAGS_FOR_TARGET=${CFLAGS_FOR_TARGET:=""}
+    export CXXFLAGS_FOR_TARGET=${CXXFLAGS_FOR_TARGET:=$CFLAGS_FOR_TARGET}
     export GCC_PARAMS=${GCC_PARAMS:=""}
     export GLIBC_EX_FLAGS=${GLIBC_EX_FLAGS:=""}
 elif [[ ${BUILD_ARCH} == armbe ]]; then
     export TARGET=${TARGET:=armbe-linux-gnueabi}
     export KERNEL_ARCH=arm
     export CFLAGS_FOR_TARGET=${CFLAGS_FOR_TARGET:="-mbig-endian"}
+    export CXXFLAGS_FOR_TARGET=${CXXFLAGS_FOR_TARGET:=$CFLAGS_FOR_TARGET}
     export GCC_PARAMS=${GCC_PARAMS:="--with-endian=big"}
     export GLIBC_EX_FLAGS=${GLIBC_EX_FLAGS:=""}
 elif [[ ${BUILD_ARCH} == i686 ]]; then
     export TARGET=${TARGET:=i686-linux-gnu}
     export KERNEL_ARCH=x86
     export CFLAGS_FOR_TARGET=${CFLAGS_FOR_TARGET:=""}
+    export CXXFLAGS_FOR_TARGET=${CXXFLAGS_FOR_TARGET:=$CFLAGS_FOR_TARGET}
     export GCC_PARAMS=${GCC_PARAMS:=""}
     export GLIBC_EX_FLAGS=${GLIBC_EX_FLAGS:=""}
 elif [[ ${BUILD_ARCH} == powerpc ]]; then
     export TARGET=${TARGET:=powerpc-linux-gnu}
     export KERNEL_ARCH=powerpc
     export CFLAGS_FOR_TARGET=${CFLAGS_FOR_TARGET:=""}
+    export CXXFLAGS_FOR_TARGET=${CXXFLAGS_FOR_TARGET:=$CFLAGS_FOR_TARGET}
     export GCC_PARAMS=${GCC_PARAMS:=""}
     export GLIBC_EX_FLAGS=${GLIBC_EX_FLAGS:=""}
 else
