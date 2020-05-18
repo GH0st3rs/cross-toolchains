@@ -132,9 +132,15 @@ err_report() {
     exit 1
 }
 
+realpath_d() {
+    local dname="$1"
+    mkdir -p ${dname}
+    echo "$(realpath ${dname})"
+}
+
 init_logs() {
     export LOGS_DIR=$(mktemp -d)
-    if ((! VERBOSE)); then
+    if (( ! VERBOSE )); then
         ERROR_FILE=${LOGS_DIR}/error.log
         LOG_FILE=${LOGS_DIR}/output.log
         # Clear logs
@@ -357,7 +363,7 @@ openssl_build() {
     # prepare
     cd ${pkgname}-${pkgver}
     # Patch ssl dir to /etc/ssl
-    sed -i "s|./demoCA|$(realpath ${PREFIX}/../etc/ssl)|g" ./apps/*.{cnf,in}
+    sed -i "s|./demoCA|$(realpath_d ${PREFIX}/../etc/ssl)|g" ./apps/*.{cnf,in}
     # build
     if [[ ${TARGET_ARCH} == i686 ]]; then
         local EXTRA_FLAGS="-m32"
@@ -369,7 +375,7 @@ openssl_build() {
     CC="$TARGET_CC" CXX="$TARGET_CXX" ./Configure \
         $SSL_ARCH \
         --prefix=${PREFIX} \
-        --openssldir="$(realpath ${PREFIX}/../etc/ssl)" \
+        --openssldir="$(realpath_d ${PREFIX}/../etc/ssl)" \
         no-shared \
         no-fuzz-afl \
         no-fuzz-libfuzzer \
@@ -387,7 +393,7 @@ openssl_build() {
         CC="$TARGET_CC" CXX="$TARGET_CXX" ./Configure \
             $SSL_ARCH \
             --prefix=${pkgdir}/${PREFIX} \
-            --openssldir="$(realpath ${pkgdir}/${PREFIX}/../etc/ssl)" \
+            --openssldir="$(realpath_d ${pkgdir}/${PREFIX}/../etc/ssl)" \
             no-shared \
             no-fuzz-afl \
             no-fuzz-libfuzzer \
@@ -713,7 +719,7 @@ ca-certificates_build() {
     # build
     cd $(mktemp -d)
     wget ${source} --no-check-certificate -O update-ca-trust
-    sed -ir "s|/etc|$(realpath ${PREFIX}/../etc)|" update-ca-trust
+    sed -ir "s|/etc|$(realpath_d ${PREFIX}/../etc)|" update-ca-trust
     # package
     install -D update-ca-trust "${PREFIX}/bin/update-ca-trust"
     # Trust source directories
@@ -1076,7 +1082,7 @@ libgcrypt_build() {
     sed -i "s:t-sexp::" tests/Makefile.am
     autoreconf -vfi
     # build
-    LDFLAGS="${LDFLAGS} -Wl,-static" CC="$TARGET_CC" ../${pkgname}-${pkgver}/configure \
+    CC="$TARGET_CC" ../${pkgname}-${pkgver}/configure \
         --prefix=${PREFIX} \
         --host=${TARGET} \
         --disable-doc \
@@ -1122,7 +1128,7 @@ gnupg_build() {
         --disable-doc \
         --enable-symcryptrun \
         --enable-maintainer-mode \
-        --sysconfdir="$(realpath ${PREFIX}/../etc)" \
+        --sysconfdir="$(realpath_d ${PREFIX}/../etc)" \
         --sbindir=${PREFIX}/bin \
         --libexecdir=${PREFIX}/lib/gnupg \
         --disable-all-tests \
@@ -1188,13 +1194,13 @@ attr_build() {
     print_info "Compile ${pkgname} - ${pkgdesc}"
     # build
     mkdir ${pkgname}-${pkgver}-build && cd ${pkgname}-${pkgver}-build
-    LDFLAGS="${LDFLAGS} -Wl,-static" CC="$TARGET_CC" ../${pkgname}-${pkgver}/configure \
+    CC="$TARGET_CC" ../${pkgname}-${pkgver}/configure \
         --prefix=${PREFIX} \
         --host=${TARGET} \
         --libdir=${PREFIX}/lib \
         --libexecdir=${PREFIX}/lib \
         --enable-static \
-        --sysconfdir="$(realpath ${PREFIX}/../etc)" \
+        --sysconfdir="$(realpath_d ${PREFIX}/../etc)" \
         ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
     # package
@@ -1230,7 +1236,7 @@ libsecret_build() {
         --libdir=${PREFIX}/lib \
         --libexecdir=${PREFIX}/lib \
         --enable-static \
-        --sysconfdir="$(realpath ${PREFIX}/../etc)" \
+        --sysconfdir="$(realpath_d ${PREFIX}/../etc)" \
         ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
     # package
@@ -1244,6 +1250,40 @@ libsecret_build() {
 
     check_lib "attr" "-lattr"
 }
+
+
+acl_build() {
+    local pkgname=acl
+    local pkgver=2.2.53
+    local source="https://download.savannah.gnu.org/releases/${pkgname}/${pkgname}-${pkgver}.tar.gz"
+    local depends=('attr')
+    local pkgdir="/tmp/${pkgname}-${pkgver}"
+    download ${source}
+    print_info "Resolve dependies for ${pkgname}"
+    resolve_deps ${depends[@]}
+    print_info "Compile ${pkgname} - ${pkgdesc}"
+    # build
+    mkdir ${pkgname}-${pkgver}-build && cd ${pkgname}-${pkgver}-build
+    CC="$TARGET_CC" ../${pkgname}-${pkgver}/configure \
+        --prefix=${PREFIX} \
+        --host=${TARGET} \
+        --libdir=${PREFIX}/lib \
+        --libexecdir=${PREFIX}/lib \
+        --sysconfdir="$(realpath_d ${PREFIX}/../etc)" \
+        ${CONFIGURE_ARGS[@]}
+    make ${PARALLEL_MAKE}
+    # package
+    if ((CREATE_PACKAGE)); then
+        make DESTDIR=${pkgdir} install-strip
+    fi
+    if ((MAKE_INSTALL)); then
+        make install-strip
+    fi
+    cd ..
+
+    check_lib "acl" "-lacl"
+}
+
 
 #####################################################################################################
 #                                               SOFT
@@ -1282,8 +1322,8 @@ pacman_build() {
         --with-libcurl \
         --disable-doc \
         --enable-static \
-        --localstatedir="$(realpath ${PREFIX}/../var)" \
-        --sysconfdir="$(realpath ${PREFIX}/../etc)" \
+        --localstatedir="$(realpath_d ${PREFIX}/../var)" \
+        --sysconfdir="$(realpath_d ${PREFIX}/../etc)" \
         --libdir=$PREFIX/lib \
         --disable-shared
     make ${PARALLEL_MAKE}
@@ -1342,7 +1382,7 @@ EOF
         --disable-ntlm \
         --disable-debug \
         --with-ssl=openssl \
-        --sysconfdir="$(realpath ${PREFIX}/../etc)"
+        --sysconfdir="$(realpath_d ${PREFIX}/../etc)"
     make ${PARALLEL_MAKE}
     strip_debug ./src/wget
     if ((CREATE_PACKAGE)); then
@@ -1614,7 +1654,7 @@ distcc_build() {
         --enable-rfc2553 \
         --mandir=${PREFIX}/share/man \
         --sbindir=${PREFIX}/bin \
-        --sysconfdir="$(realpath -sm ${PREFIX}/../etc)" \
+        --sysconfdir="$(realpath_d ${PREFIX}/../etc)" \
         --without-avahi \
         --without-libiberty
         # --with-gtk
