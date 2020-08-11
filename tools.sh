@@ -1147,25 +1147,25 @@ gnupg_build() {
 
 gpgme_build() {
     apt install -y gcc
-    local pkgbase=gpgme
+    local pkgname=gpgme
     local pkgver=1.13.1
     local pkgdesc="A C wrapper library for GnuPG"
-    local source=https://www.gnupg.org/ftp/gcrypt/${pkgbase}/${pkgbase}-${pkgver}.tar.bz2
+    local source=https://www.gnupg.org/ftp/gcrypt/${pkgname}/${pkgname}-${pkgver}.tar.bz2
     local depends=('gnupg' 'libgpg-error')
     local pkgdir="/tmp/${pkgname}-${pkgver}"
     download ${source}
-    print_info "Resolve dependies for ${pkgbase}"
+    print_info "Resolve dependies for ${pkgname}"
     resolve_deps ${depends[@]}
-    print_info "Compile ${pkgbase} - ${pkgdesc}"
+    print_info "Compile ${pkgname} - ${pkgdesc}"
     # prepare
-    mkdir ${pkgbase}-${pkgver}-build && cd ${pkgbase}-${pkgver}-build
+    mkdir ${pkgname}-${pkgver}-build && cd ${pkgname}-${pkgver}-build
     # Fix undefined reference
-    sed -ri 's|(gpgme_json_LDADD = -lm libgpgme.la \$\()GPG_ERROR_LIBS\)|\1LIBASSUAN_LIBS\)|' ../${pkgbase}-${pkgver}/src/Makefile.*
-    sed -ri 's|(LIBS = @LIBS@)|\1 @LIBASSUAN_LIBS@|' ../${pkgbase}-${pkgver}/tests/Makefile.*
-    sed -ri 's|(LIBS = @LIBS@)|\1 @LIBASSUAN_LIBS@|' ../${pkgbase}-${pkgver}/tests/*/Makefile.*
-    sed -ri 's|(LIBS = @LIBS@)|\1 @LIBASSUAN_LIBS@|' ../${pkgbase}-${pkgver}/lang/cpp/tests/Makefile*
+    sed -ri 's|(gpgme_json_LDADD = -lm libgpgme.la \$\()GPG_ERROR_LIBS\)|\1LIBASSUAN_LIBS\)|' ../${pkgname}-${pkgver}/src/Makefile.*
+    sed -ri 's|(LIBS = @LIBS@)|\1 @LIBASSUAN_LIBS@|' ../${pkgname}-${pkgver}/tests/Makefile.*
+    sed -ri 's|(LIBS = @LIBS@)|\1 @LIBASSUAN_LIBS@|' ../${pkgname}-${pkgver}/tests/*/Makefile.*
+    sed -ri 's|(LIBS = @LIBS@)|\1 @LIBASSUAN_LIBS@|' ../${pkgname}-${pkgver}/lang/cpp/tests/Makefile*
     # build
-    CC="$TARGET_CC" CXX="$TARGET_CXX" ../${pkgbase}-${pkgver}/configure \
+    CC="$TARGET_CC" CXX="$TARGET_CXX" ../${pkgname}-${pkgver}/configure \
         --prefix=${PREFIX} \
         --host=${TARGET} \
         --enable-static \
@@ -1639,6 +1639,7 @@ distcc_build() {
     local pkgdesc='Distributed compilation service for C, C++ and Objective-C'
     local source="https://github.com/distcc/${pkgname}/releases/download/v${pkgver}/${pkgname}-${pkgver}.tar.gz"
     local depends=('popt' 'python3')
+    local pkgdir="/tmp/${pkgname}-${pkgver}"
     download ${source}
     print_info "Resolve dependies for ${pkgname}"
     # resolve_deps ${depends[@]}
@@ -1661,13 +1662,64 @@ distcc_build() {
         --sysconfdir="$(realpath_d ${PREFIX}/../etc)" \
         --without-avahi \
         --without-libiberty
-        # --with-gtk
     make WERROR_CFLAGS= INCLUDESERVER_PYTHON=/bin/python
     if ((MAKE_INSTALL)); then
         make INCLUDESERVER_PYTHON=/bin/python install-conf install-program
     fi
     exit
     cd ..
+}
+
+
+yajl_build() {
+    apt install -y cmake
+    local pkgname=yajl
+    local pkgver=2.1.0
+    local source="https://github.com/lloyd/${pkgname}/archive/${pkgver}.tar.gz"
+    local pkgdir="/tmp/${pkgname}-${pkgver}"
+    download ${source}
+    print_info "Compile ${pkgname} - ${pkgdesc}"
+    # build
+    cd ${pkgname}-${pkgver}
+    cmake -DCMAKE_C_FLAGS="${CFLAGS_FOR_TARGET}" \
+        -DCMAKE_C_COMPILER="${TARGET}-gcc" \
+        -DCMAKE_INSTALL_PREFIX=${PREFIX} .
+    make ${PARALLEL_MAKE}
+    # package
+    if ((CREATE_PACKAGE)); then
+        make DESTDIR="${pkgdir}" install
+    fi
+    if ((MAKE_INSTALL)); then
+        make install
+    fi
+    cd ..
+
+    check_lib "yajl" "-L${PREFIX}/lib -lyajl_s"
+}
+
+
+package-query_build() {
+    local pkgname=package-query
+    local pkgver=1.11
+    local depends=('pacman' 'yajl')
+    local source="https://github.com/archlinuxfr/${pkgname}/releases/download/${pkgver}/${pkgname}-${pkgver}.tar.gz"
+    local pkgdir="/tmp/${pkgname}-${pkgver}"
+    download ${source}
+    print_info "Resolve dependies for ${pkgname}"
+    # resolve_deps ${depends[@]}
+    print_info "Compile ${pkgname} - ${pkgdesc}"
+    # build
+    cd ${pkgname}-${pkgver}
+    sed -ri 's|(-lalpm)|\1 $alpm_LIBS|g' ./configure
+    cat ./configure|grep 'alpm $LIBS'
+    PKG_CONFIG="pkg-config --static" CC="$TARGET_CC" alpm_LIBS="$(pkg-config --static --libs libalpm)" ./configure \
+        --prefix=${PREFIX} \
+        --host=${TARGET} \
+        --localstatedir="$(realpath_d ${PREFIX}/../var)" \
+        --sysconfdir="$(realpath_d ${PREFIX}/../etc)" \
+        --with-aur-url=https://aur.archlinux.org
+    make ${PARALLEL_MAKE}
+    exit
 }
 
 
@@ -1731,7 +1783,8 @@ done
 init ${TARGET_ARCH}
 # Compile packages
 for pkg in ${LIST_OF_INSTALL_PACKAGES[@]}; do
-    resolve_deps ${pkg}
+    # resolve_deps ${pkg};
+    ${pkg}_build ;
 done
 
 
