@@ -50,6 +50,8 @@ fi
 MAKE_INSTALL=0
 VERBOSE=0
 CREATE_PACKAGE=0
+UPDATE=0
+ENABLE_STATIC=0
 
 
 # Set script params
@@ -138,6 +140,21 @@ realpath_d() {
     echo "$(realpath ${dname})"
 }
 
+getos() {
+    if [[ -e /etc/os-release ]]; then
+        . /etc/os-release;
+        echo $ID;
+    else
+        if [[ -e /etc/gentoo-release ]]; then
+            echo "gentoo"
+        elif [[ -e /etc/arch-release ]]; then
+            echo "arch"
+        elif [[ -e /etc/debian_version ]]; then
+            echo "ubuntu"
+        fi
+    fi
+}
+
 init_logs() {
     export LOGS_DIR=$(mktemp -d)
     if (( ! VERBOSE )); then
@@ -153,11 +170,33 @@ init_logs() {
     redirect_output
 }
 
-upgrade_system() {
-    print_info "Update apt-get"
+ubuntu_upgrade_system() {
+    print_info "Update with apt-get"
     apt-get update && apt-get -y upgrade
-    apt-get install -y make gawk wget pkg-config ccache
+    apt-get install -y make gawk wget pkg-config ccache git
+    apt-get install -y libfile-dircompare-perl gcc-multilib p11-kit xz-utils texinfo g++
+    apt-get install -y lzma autoconf automake autopoint libtool gcc lzip m4 gettext gtk-doc-tools
+    apt-get install -y cmake
     apt-get -y autoremove
+}
+
+gentoo_upgrade_system() {
+    print_info "Update with emerge"
+    emerge --sync && emerge --oneshot sys-apps/portage
+    emerge sys-devel/make dev-util/cmake net-misc/wget dev-util/ccache dev-vcs/git dev-util/pkgconf
+    emerge app-crypt/p11-kit app-arch/lzma app-arch/lzip app-arch/xz-utils sys-apps/texinfo
+    emerge sys-devel/gcc sys-devel/autoconf sys-devel/automake sys-devel/m4 sys-devel/gettext sys-devel/libtool
+    emerge --depclean
+}
+
+upgrade_system() {
+    (( ! UPDATE )) && return
+    local arch=$(getos)
+    if [[ ${arch} == "ubuntu" ]]; then
+        ubuntu_upgrade_system
+    elif [[ ${arch} == "gentoo" ]]; then
+        gentoo_upgrade_system
+    fi
 }
 
 init() {
@@ -173,11 +212,11 @@ init() {
     export CFLAGS="${CFLAGS} -s -O2 "
     export LDFLAGS="${LDFLAGS} -s "
 
-    export USR=$TOOLCHAIN_DIR
-    export PREFIX=${PREFIX:=$USR/$TARGET}
+    export USR=${TOOLCHAIN_DIR}
+    export PREFIX=${PREFIX:=${USR}/$TARGET}
     export PKG_CONFIG_LIBDIR=${PREFIX}/lib/pkgconfig
     export PKG_CONFIG_PATH=${PKG_CONFIG_LIBDIR}
-    export PATH=$PATH:$PREFIX/bin:$USR/bin
+    export PATH=${PATH}:${PREFIX}/bin:${USR}/bin
     export PARALLEL_MAKE="-j$((`nproc` * 2))"
     # if [[ $(uname -m) == x86_64 ]]; then
     #     export DEB_ARCH=amd64
@@ -198,14 +237,16 @@ init() {
     else
         export CONFIGURE_ARGS=${CONFIGURE_ARGS:=""}
     fi
-    export DEB_DESC="Description: Tools for $DEB_TARGET toolchain"
-    export TOOLS_NAME="$DEB_TARGET"
+    # Enable static build if needed
+    ((ENABLE_STATIC)) && CONFIGURE_ARGS+=('--enable-static')
+    export DEB_DESC="Description: Tools for ${DEB_TARGET} toolchain"
+    export TOOLS_NAME="${DEB_TARGET}"
     
-    if [[ ! -d $TMP_BUILD_DIR ]]; then
-        mkdir -p $TMP_BUILD_DIR
-        cd $TMP_BUILD_DIR
+    if [[ ! -d ${TMP_BUILD_DIR} ]]; then
+        mkdir -p ${TMP_BUILD_DIR}
+        cd ${TMP_BUILD_DIR}
     else
-        cd $TMP_BUILD_DIR
+        cd ${TMP_BUILD_DIR}
         print_info "Remove previous sources"
         ls|grep -v "\.tar\."| xargs rm -rf
     fi
@@ -225,7 +266,7 @@ usage() {
     init_logs
     restore_output
 cat << EOF
-usage: args.py [-h] [-i] [-o DIR] [-d] [-v] -a ARCH [-p PACKETS] [-l]
+usage: tools.sh [-h] [-i] [-o DIR] [-d] [-v] -a ARCH [-p PACKETS] [-l] [-u]
 
 optional arguments:
   -h, --help      Show this help message and exit
@@ -236,6 +277,7 @@ optional arguments:
   -o DIR          Binary output directory
   -d              Create DEB package
   -v              Verbose
+  -u              Update system repository
 EOF
     redirect_output
     exit 1
@@ -284,7 +326,7 @@ ARCHS=(armel armbe mipsel mips i686 powerpc)
 
 is_lib_installed() {
     echo "void main(){}" > test.c
-    $TARGET_CC test.c $1 -static 2>/dev/null
+    $TARGET_CC test.c $1 -static -L"${PREFIX}"/lib 2>/dev/null
     if [[ $? == 0 ]]; then
         return 1
     else
@@ -313,7 +355,7 @@ resolve_deps() {
         case "$dep" in 
             bzip2             ) lib_name="-lbz2" ;;
             libgpg-error|curl ) lib_name="-l$(echo ${dep}|sed 's|lib||')" ;;
-            gnupg             ) if [[ -e $PREFIX/bin/gpg ]]; then continue; fi ;;
+            gnupg             ) if [[ -e ${PREFIX}/bin/gpg ]]; then continue; fi ;;
             ca-certificates   ) ;;
             *                 ) lib_name="$(pkg-config --libs --static ${dep} 2>/dev/null)"; if [[ $? == 1 ]]; then lib_name="-l$(echo ${dep}|sed 's|lib||')"; fi ;;
         esac
@@ -334,9 +376,10 @@ zlib_build() {
     download ${source}
     print_info "Compile ${pkgname} - ${pkgdesc}"
     cd ${pkgname}-${pkgver}
-    CC="$TARGET_CC" ./configure \
+    ((ENABLE_STATIC)) && EXTRA_FLAGS=('--static')
+    CC="${TARGET_CC}" ./configure \
         --prefix=${PREFIX} \
-        --static
+        ${EXTRA_FLAGS[@]}
     make ${PARALLEL_MAKE}
     if ((CREATE_PACKAGE)); then
         make DESTDIR=${pkgdir} install
@@ -352,7 +395,6 @@ zlib_build() {
 
 
 openssl_build() {
-    apt-get install -y libfile-dircompare-perl
     local pkgname=openssl
     local pkgver=1.1.1
     local pkgdesc="The Open Source toolkit for Secure Sockets Layer and Transport Layer Security"
@@ -366,22 +408,22 @@ openssl_build() {
     sed -i "s|./demoCA|$(realpath_d ${PREFIX}/../etc/ssl)|g" ./apps/*.{cnf,in}
     # build
     if [[ ${TARGET_ARCH} == i686 ]]; then
-        local EXTRA_FLAGS="-m32"
+        local EXTRA_FLAGS=("-m32")
     elif [[ ${TARGET_ARCH} == powerpc ]]; then
-        local EXTRA_FLAGS=""
+        local EXTRA_FLAGS=("")
     else
-        local EXTRA_FLAGS="-march=${SSL_MARCH} -lpthread"
+        local EXTRA_FLAGS=("-march=${SSL_MARCH}" "-lpthread")
     fi
-    CC="$TARGET_CC" CXX="$TARGET_CXX" ./Configure \
+    ((ENABLE_STATIC)) && EXTRA_FLAGS+=("no-shared")
+    CC="${TARGET_CC}" CXX="${TARGET_CXX}" ./Configure \
         $SSL_ARCH \
         --prefix=${PREFIX} \
         --openssldir="$(realpath_d ${PREFIX}/../etc/ssl)" \
-        no-shared \
         no-fuzz-afl \
         no-fuzz-libfuzzer \
         -fPIC -I${PREFIX}/include -L${PREFIX}/lib \
         ${LDFLAGS} ${CFLAGS} \
-        ${EXTRA_FLAGS}
+        ${EXTRA_FLAGS[@]}
     make ${PARALLEL_MAKE}
     strip_debug apps/openssl
     # package
@@ -394,12 +436,11 @@ openssl_build() {
             $SSL_ARCH \
             --prefix=${pkgdir}/${PREFIX} \
             --openssldir="$(realpath_d ${pkgdir}/${PREFIX}/../etc/ssl)" \
-            no-shared \
             no-fuzz-afl \
             no-fuzz-libfuzzer \
             -fPIC -I${PREFIX}/include -L${PREFIX}/lib \
             ${LDFLAGS} ${CFLAGS} \
-            ${EXTRA_FLAGS}
+            ${EXTRA_FLAGS[@]}
         make ${PARALLEL_MAKE}
         make install
     fi
@@ -426,7 +467,6 @@ libevent_build() {
         --host=${TARGET} \
         --with-pic \
         --prefix=${PREFIX} \
-        --enable-static \
         ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
     if ((CREATE_PACKAGE)); then
@@ -457,7 +497,6 @@ libtasn1_build() {
         --prefix=${PREFIX} \
         --host=${TARGET} \
         --disable-doc \
-        --enable-static \
         ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
     # package
@@ -478,7 +517,6 @@ flex_build() {
     print_info "Compile ${pkgname} - ${pkgdesc}"
     mkdir flex-$FLEXv-build && cd flex-$FLEXv-build
     if [[ $(uname -m) == x86_64 ]]; then
-        apt-get -y install gcc-multilib
         LDFLAGS="${LDFLAGS} -static -s" CFLAGS="${CFLAGS} -static -O2 -s" CXXFLAGS=$CFLAGS CC="$TARGET_CC" ../flex-$FLEXv/configure --prefix=$PREFIX --enable-static --host=$TARGET $BUILDTARGET CFLAGS_FOR_BUILD="-s -O2 -m32"
     else
         LDFLAGS="${LDFLAGS} -static -s" CFLAGS="${CFLAGS} -static -O2 -s" CXXFLAGS=$CFLAGS CC="$TARGET_CC" ../flex-$FLEXv/configure --prefix=$PREFIX --enable-static --host=$TARGET $BUILDTARGET
@@ -544,7 +582,6 @@ libarchive_build() {
     CC="$TARGET_CC" ../${pkgname}-${pkgver}/configure \
         --prefix=${PREFIX} \
         --host=${TARGET} \
-        --enable-static \
         --without-xml2 \
         --without-lzma \
         --with-zlib \
@@ -605,7 +642,6 @@ magic_build() {
     LDFLAGS="${LDFLAGS} -static -s" CFLAGS="${CFLAGS} -s -w -static -O2" CC="$TARGET_CC" ../file-$LMAGICv/configure \
         --prefix=$PREFIX \
         --host=$TARGET \
-        --enable-static \
         --includedir=$PREFIX/include \
         --libdir=$PREFIX/lib \
         ${CONFIGURE_ARGS[@]}
@@ -635,7 +671,6 @@ popt_build() {
     CC="$TARGET_CC" ../${pkgname}-${pkgver}/configure \
         --prefix=${PREFIX} \
         --host=${TARGET} \
-        --enable-static \
         --disable-nls \
         ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
@@ -659,7 +694,6 @@ beecrypt_build() {
     LDFLAGS="${LDFLAGS} -static -s" CFLAGS="${CFLAGS} -s -static -O2" CC="$TARGET_CC" ../beecrypt-$BEECRYPTv/configure \
         --prefix=$PREFIX \
         --host=$TARGET \
-        --enable-static \
         --enable-openmp \
         --disable-debug \
         --without-java \
@@ -690,7 +724,6 @@ db_build() {
         --prefix=$PREFIX \
         --host=$TARGET \
         --disable-java \
-        --enable-static \
         ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
     if ((CREATE_PACKAGE)); then
@@ -709,7 +742,6 @@ db_build() {
 
 
 ca-certificates_build() {
-    apt install -y p11-kit
     local pkgbase=ca-certificates
     local pkgname=ca-certificates-utils
     local pkgver=20181109
@@ -749,7 +781,8 @@ curl_build() {
     print_info "Compile ${pkgname} - ${pkgdesc}"
     # build
     mkdir ${pkgname}-${pkgver}-build && cd ${pkgname}-${pkgver}-build
-    LIBS="-ldl -lpthread" CPPFLAGS="-DCURL_STATICLIB" CC=$TARGET_CC ../${pkgname}-${pkgver}/configure \
+    ((ENABLE_STATIC)) && CPPFLAGS="-DCURL_STATICLIB"
+    LIBS="-ldl -lpthread" CPPFLAGS="${CPPFLAGS}" CC=${TARGET_CC} ../${pkgname}-${pkgver}/configure \
         --host=${TARGET} \
         --target=${TARGET} \
         --prefix=${PREFIX} \
@@ -767,7 +800,6 @@ curl_build() {
         --disable-gopher \
         --disable-crypto-auth \
         --disable-sspi \
-        --disable-shared \
         --disable-debug \
         --disable-curldebug \
         --disable-manual \
@@ -776,13 +808,13 @@ curl_build() {
         --enable-http \
         --enable-cookies \
         --enable-optimize \
-        --enable-static \
         --without-axtls \
         --with-proxy \
         --with-zlib \
         --with-ssl="$(realpath -s ${PREFIX}/../etc/ssl)" \
         --with-ca-bundle="$(realpath -s ${PREFIX}/../etc/ssl/certs/ca-certificates.crt)" \
-        --with-random=/dev/urandom
+        --with-random=/dev/urandom \
+        ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
     # package
     strip_debug src/curl
@@ -794,12 +826,11 @@ curl_build() {
     fi
     cd ..
 
-    check_lib "libCURL" "-lcurl"
+    check_lib "libCURL" "-lcurl -L${PREFIX}/lib"
 }
 
 
 libunistring_build() {
-    apt install -y xz-utils lzma
     local pkgname=libunistring
     local pkgver=0.9.10
     local pkgdesc="Library for manipulating Unicode strings and C strings"
@@ -812,10 +843,9 @@ libunistring_build() {
     # https://git.savannah.gnu.org/cgit/gnulib.git/commit/?id=cca32830b5
     sed -i '/pragma weak pthread_create/d' tests/glthread/thread.h
     # build
-    CC="$TARGET_CC" ../${pkgname}-${pkgver}/configure \
+    CC="${TARGET_CC}" ../${pkgname}-${pkgver}/configure \
         --prefix=${PREFIX} \
         --host=${TARGET} \
-        --enable-static \
         ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
     # package
@@ -827,12 +857,11 @@ libunistring_build() {
     fi
     cd ..
 
-    check_lib "libunistring" "-lunistring"
+    check_lib "libunistring" "-lunistring -L${PREFIX}/lib"
 }
 
 
 libgpg-error_build() {
-    apt install -y autoconf automake autopoint libtool gcc
     local pkgname=libgpg-error
     local pkgver=1.37
     local pkgdesc="Support library for libgcrypt"
@@ -848,7 +877,6 @@ libgpg-error_build() {
         --prefix=${PREFIX} \
         --host=${TARGET} \
         --disable-doc \
-        --enable-static \
         ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
     # package
@@ -881,7 +909,6 @@ libassuan_build() {
         --prefix=${PREFIX} \
         --host=${TARGET} \
         --disable-doc \
-        --enable-static \
         ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
     # package
@@ -898,7 +925,6 @@ libassuan_build() {
 
 
 gmp_build() {
-    apt install -y lzip m4 gcc
     local pkgname=gmp
     local pkgver=6.1.2
     local pkgdesc="A free library for arbitrary precision arithmetic"
@@ -914,7 +940,6 @@ gmp_build() {
         --enable-cxx \
         --enable-fat \
         --build=${MACHTYPE} \
-        --enable-static \
         ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
     # package
@@ -931,7 +956,6 @@ gmp_build() {
 
 
 nettle_build() {
-    apt install -y gcc
     local pkgname=nettle
     local pkgver=3.5.1
     local pkgdesc="A low-level cryptographic library"
@@ -948,7 +972,6 @@ nettle_build() {
         --prefix=${PREFIX} \
         --host=${TARGET} \
         --enable-mini-gmp \
-        --enable-static \
         ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
     # package
@@ -965,7 +988,6 @@ nettle_build() {
 
 
 gnutls_build() {
-    apt install -y pkg-config
     local pkgname=gnutls
     local pkgver=3.6.13
     local pkgdesc="A library which provides a secure layer over a reliable transport layer"
@@ -978,12 +1000,12 @@ gnutls_build() {
     print_info "Compile ${pkgname} - ${pkgdesc}"
     # build
     mkdir ${pkgname}-${pkgver}-build && cd ${pkgname}-${pkgver}-build
-    CC="$TARGET_CC" CXX="$TARGET_CXX" ../${pkgname}-${pkgver}/configure \
+    PKG_CONFIG=/usr/bin/pkg-config CC="${TARGET_CC}" CXX="${TARGET_CXX}" CFLAGS="-L${PREFIX}/lib -I${PREFIX}/include" ../${pkgname}-${pkgver}/configure \
         --prefix=${PREFIX} \
         --host=${TARGET} \
         --without-p11-kit \
         --disable-doc \
-        --enable-static \
+        --libdir=${PREFIX}/lib \
         ${CONFIGURE_ARGS[@]}
     make
     # package
@@ -1009,11 +1031,10 @@ npth_build() {
     print_info "Compile ${pkgname} - ${pkgdesc}"
     # build
     mkdir ${pkgname}-${pkgver}-build && cd ${pkgname}-${pkgver}-build
-    CC="$TARGET_CC" ../${pkgname}-${pkgver}/configure \
+    CC="${TARGET_CC}" ../${pkgname}-${pkgver}/configure \
         --prefix=${PREFIX} \
         --host=${TARGET} \
         --enable-maintainer-mode \
-        --enable-static \
         ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
     # package
@@ -1030,7 +1051,6 @@ npth_build() {
 
 
 libksba_build() {
-    apt install -y gcc
     local pkgname=libksba
     local pkgver=1.3.5
     local pkgdesc="A CMS and X.509 access library"
@@ -1043,10 +1063,9 @@ libksba_build() {
     print_info "Compile ${pkgname} - ${pkgdesc}"
     # build
     mkdir ${pkgname}-${pkgver}-build && cd ${pkgname}-${pkgver}-build
-    CC="$TARGET_CC" ../${pkgname}-${pkgver}/configure \
+    CC="${TARGET_CC}" CFLAGS="-I${PREFIX}/include -L${PREFIX}/lib" ../${pkgname}-${pkgver}/configure \
         --prefix=${PREFIX} \
         --host=${TARGET} \
-        --enable-static \
         ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
     # package
@@ -1063,7 +1082,6 @@ libksba_build() {
 
 
 libgcrypt_build() {
-    apt install -y git gcc
     local pkgname=libgcrypt
     local pkgver=1.8.5
     local pkgdesc="General purpose cryptographic library based on the code from GnuPG"
@@ -1082,12 +1100,11 @@ libgcrypt_build() {
     sed -i "s:t-sexp::" tests/Makefile.am
     autoreconf -vfi
     # build
-    CC="$TARGET_CC" ../${pkgname}-${pkgver}/configure \
+    CC="${TARGET_CC}" ../${pkgname}-${pkgver}/configure \
         --prefix=${PREFIX} \
         --host=${TARGET} \
         --disable-doc \
         --disable-padlock-support \
-        --enable-static \
         --with-libgpg-error-prefix=${PREFIX} \
         ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
@@ -1105,7 +1122,6 @@ libgcrypt_build() {
 
 
 gnupg_build() {
-    apt install -y gcc
     local pkgname=gnupg
     local pkgver=2.2.20
     local pkgdesc="Complete and free implementation of the OpenPGP standard"
@@ -1122,7 +1138,7 @@ gnupg_build() {
     wget "https://git.archlinux.org/svntogit/packages.git/plain/trunk/self-sigs-only.patch?h=packages/gnupg&id=9e5bbc8579a58fb0bb28a3377b0d558835c0adb8" -O self-sigs-only.patch
     patch -R -p1 -i self-sigs-only.patch
     # build
-    LIBGNUTLS_LIBS=$(pkg-config --libs --static gnutls) CC="$TARGET_CC" ./configure \
+    PKG_CONFIG=/usr/bin/pkg-config LIBGNUTLS_LIBS=$(pkg-config --libs --static gnutls) CC="${TARGET_CC}" CFLAGS="-I${PREFIX}/include -L${PREFIX}/lib" ./configure \
         --prefix=${PREFIX} \
         --host=${TARGET} \
         --disable-doc \
@@ -1146,7 +1162,6 @@ gnupg_build() {
 
 
 gpgme_build() {
-    apt install -y gcc
     local pkgname=gpgme
     local pkgver=1.13.1
     local pkgdesc="A C wrapper library for GnuPG"
@@ -1165,10 +1180,9 @@ gpgme_build() {
     sed -ri 's|(LIBS = @LIBS@)|\1 @LIBASSUAN_LIBS@|' ../${pkgname}-${pkgver}/tests/*/Makefile.*
     sed -ri 's|(LIBS = @LIBS@)|\1 @LIBASSUAN_LIBS@|' ../${pkgname}-${pkgver}/lang/cpp/tests/Makefile*
     # build
-    CC="$TARGET_CC" CXX="$TARGET_CXX" ../${pkgname}-${pkgver}/configure \
+    CC="${TARGET_CC}" CXX="$TARGET_CXX" ../${pkgname}-${pkgver}/configure \
         --prefix=${PREFIX} \
         --host=${TARGET} \
-        --enable-static \
         --disable-gpgsm-test \
         --disable-fd-passing \
         ${CONFIGURE_ARGS[@]}
@@ -1194,12 +1208,11 @@ attr_build() {
     print_info "Compile ${pkgname} - ${pkgdesc}"
     # build
     mkdir ${pkgname}-${pkgver}-build && cd ${pkgname}-${pkgver}-build
-    CC="$TARGET_CC" ../${pkgname}-${pkgver}/configure \
+    CC="${TARGET_CC}" ../${pkgname}-${pkgver}/configure \
         --prefix=${PREFIX} \
         --host=${TARGET} \
         --libdir=${PREFIX}/lib \
         --libexecdir=${PREFIX}/lib \
-        --enable-static \
         --sysconfdir="$(realpath_d ${PREFIX}/../etc)" \
         ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
@@ -1217,7 +1230,6 @@ attr_build() {
 
 
 libsecret_build() {
-    apt install -y gettext gtk-doc-tools
     local pkgname=libsecret
     local pkgver=0.20.3
     local _commit=fb456a3853a080996f044496b11f3001af4a2659
@@ -1230,12 +1242,11 @@ libsecret_build() {
     print_info "Compile ${pkgname} - ${pkgdesc}"
     # build
     cd ${pkgname}-${_commit}
-    CC="$TARGET_CC" ../${pkgname}-${_commit}/configure \
+    CC="${TARGET_CC}" ../${pkgname}-${_commit}/configure \
         --prefix=${PREFIX} \
         --host=${TARGET} \
         --libdir=${PREFIX}/lib \
         --libexecdir=${PREFIX}/lib \
-        --enable-static \
         --sysconfdir="$(realpath_d ${PREFIX}/../etc)" \
         ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
@@ -1264,7 +1275,7 @@ acl_build() {
     print_info "Compile ${pkgname} - ${pkgdesc}"
     # build
     mkdir ${pkgname}-${pkgver}-build && cd ${pkgname}-${pkgver}-build
-    CC="$TARGET_CC" ../${pkgname}-${pkgver}/configure \
+    CC="${TARGET_CC}" CFLAGS="${CFLAGS} -I${PREFIX}/include -L${PREFIX}/lib" ../${pkgname}-${pkgver}/configure \
         --prefix=${PREFIX} \
         --host=${TARGET} \
         --libdir=${PREFIX}/lib \
@@ -1316,17 +1327,16 @@ pacman_build() {
     patch -Np1 < makepkg-fix-one-more-file-seccomp-issue.patch
     sed -ri 's|(<string.h>)|\1\n#include <bits/posix2_lim.h>|' ./*/*/util.h
     # build
-    PKG_CONFIG="/usr/bin/pkg-config --static" BASH_SHELL=/bin/bash CC="$TARGET_CC" ./configure \
+    PKG_CONFIG="/usr/bin/pkg-config --static" BASH_SHELL=/bin/bash CC="${TARGET_CC}" ./configure \
         --prefix=${PREFIX} \
         --host=${TARGET} \
         --with-gpgme \
         --with-libcurl \
         --disable-doc \
-        --enable-static \
         --localstatedir="$(realpath_d ${PREFIX}/../var)" \
         --sysconfdir="$(realpath_d ${PREFIX}/../etc)" \
         --libdir=${PREFIX}/lib \
-        --disable-shared
+        ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
     # package
     if ((CREATE_PACKAGE)); then
@@ -1343,13 +1353,13 @@ bzip2_build() {
     local pkgname=bzip2
     local pkgver=1.0.8
     local pkgdesc="A high-quality data compression program"
-    local source=https://sourceware.org/pub/bzip2/$pkgname-$pkgver.tar.gz
+    local source=https://sourceware.org/pub/bzip2/${pkgname}-${pkgver}.tar.gz
     download ${source}
     print_info "Compile ${pkgname} - ${pkgdesc}"
     # build
     cd ${pkgname}-${pkgver}
-    make libbz2.a bzip2 bzip2recover CC="$TARGET_CC" AR="${AR}" RANLIB="${RANLIB}" CFLAGS="${CFLAGS}" LDFLAGS="${LDFLAGS}"
-    # make -f Makefile-libbz2_so CC="$TARGET_CC" 
+    make libbz2.a bzip2 bzip2recover CC="${TARGET_CC}" AR="${AR}" RANLIB="${RANLIB}" CFLAGS="${CFLAGS}" LDFLAGS="${LDFLAGS}"
+    # make -f Makefile-libbz2_so CC="${TARGET_CC}" 
     # package
     if ((CREATE_PACKAGE)); then
         make PREFIX="${DEB_PACK}/${PREFIX}" install
@@ -1362,7 +1372,6 @@ bzip2_build() {
 
 
 wget_build() {
-    apt install texinfo
     local pkgname=wget
     local pkgver=1.19
     local pkgdesc="Network utility to retrieve files from the Web"
@@ -1372,15 +1381,14 @@ wget_build() {
     print_info "Compile ${pkgname} - ${pkgdesc}"
     # prepare
     cd ${pkgname}-${pkgver}
-  cat >> ../${pkgname}-${pkgver}doc/sample.wgetrc <<EOF
-
+    cat >> ../${pkgname}-${pkgver}doc/sample.wgetrc <<EOF
 # default root certs location
 ca_certificate=/etc/ssl/certs/ca-certificates.crt
 EOF
     cd ..
     # build
     mkdir ${pkgname}-${pkgver}-build && cd ${pkgname}-${pkgver}-build
-    CC="$TARGET_CC" ../${pkgname}-${pkgver}/configure \
+    CC="${TARGET_CC}" ../${pkgname}-${pkgver}/configure \
         --prefix=$PREFIX \
         --host=$TARGET \
         --disable-ntlm \
@@ -1402,7 +1410,7 @@ tor_build() {
     download $TOR_LINK
     print_info "Compile ${pkgname} - ${pkgdesc}"
     mkdir tor-$TORv-build && cd tor-$TORv-build
-    LIBS="-lssl -lcrypto -ldl -lpthread" LDFLAGS="${LDFLAGS} -s -static -O2 -L$PREFIX/lib" CFLAGS="${CFLAGS} -static -s -O2 -I$PREFIX/include" CC="$TARGET_CC" ../tor-$TORv/configure \
+    LIBS="-lssl -lcrypto -ldl -lpthread" LDFLAGS="${LDFLAGS} -s -static -O2 -L$PREFIX/lib" CFLAGS="${CFLAGS} -static -s -O2 -I$PREFIX/include" CC="${TARGET_CC}" ../tor-$TORv/configure \
         --host=$TARGET \
         --disable-gcc-hardening \
         --prefix=$PREFIX \
@@ -1426,14 +1434,14 @@ ssh_build() {
     download $SSH_LINK
     print_info "Compile ${pkgname} - ${pkgdesc}"
     mkdir openssh-$SSHv-build && cd openssh-$SSHv-build
-    LDFLAGS="${LDFLAGS} -s -Wl,-static" CFLAGS="${CFLAGS} -s -static -I/usr/$TARGET/include" CC="$TARGET_CC" ../openssh-$SSHv/configure \
+    LDFLAGS="${LDFLAGS} -s -Wl,-static" CFLAGS="${CFLAGS} -s -static -I/usr/$TARGET/include" CC="${TARGET_CC}" ../openssh-$SSHv/configure \
         --target=$TARGET \
         --host=$TARGET \
         --with-md5-passwords \
         --with-zlib=$PREFIX \
         --with-ssl-dir=$PREFIX \
         --enable-strip \
-        --enable-static
+        ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
     strip_debug ssh
     strip_debug sshd
@@ -1450,7 +1458,7 @@ dropbear_build() {
     download $DROPBEAR_LINK
     print_info "Compile ${pkgname} - ${pkgdesc}"
     mkdir dropbear-$DROPBEARv-build && cd dropbear-$DROPBEARv-build
-    LDFLAGS="${LDFLAGS} -s -static -O2" CC="$TARGET_CC" ../dropbear-$DROPBEARv/configure \
+    LDFLAGS="${LDFLAGS} -s -static -O2" CC="${TARGET_CC}" ../dropbear-$DROPBEARv/configure \
         --target=$TARGET \
         --host=$TARGET \
         --disable-wtmpx \
@@ -1471,7 +1479,7 @@ python2_build() {
     download $PYTHON2_LINK
     print_info "Compile ${pkgname} - ${pkgdesc}"
     mkdir python-$PYTHON2v-build && cd python-$PYTHON2v-build
-    CFLAGS="${CFLAGS} -static -s -O2" CC="$TARGET_CC" ../Python-$PYTHON2v/configure \
+    CFLAGS="${CFLAGS} -static -s -O2" CC="${TARGET_CC}" ../Python-$PYTHON2v/configure \
         --prefix=$PREFIX \
         --target=$TARGET \
         --host=$TARGET \
@@ -1495,7 +1503,7 @@ python3_build() {
     download ${source}
     print_info "Compile ${pkgname} - ${pkgdesc}"
     mkdir ${pkgname}-${pkgver}-build && cd ${pkgname}-${pkgver}-build
-    CC="$TARGET_CC" CXX="$TARGET_CXX" ../Python-${pkgver}/configure \
+    CC="${TARGET_CC}" CXX="$TARGET_CXX" ../Python-${pkgver}/configure \
         --prefix=$PREFIX \
         --target=$TARGET \
         --host=$TARGET \
@@ -1522,18 +1530,17 @@ rpm_build() {
     download $RPM_LINK
     print_info "Compile ${pkgname} - ${pkgdesc}"
     mkdir rpm-$RPMv-build && cd rpm-$RPMv-build
-    LIBS="-lz" LDFLAGS="${LDFLAGS} -static -s" CFLAGS="${CFLAGS} -s -static -O2 -I$PREFIX/include/beecrypt" CC="$TARGET_CC" ../rpm-$RPMv/configure \
+    LIBS="-lz" LDFLAGS="${LDFLAGS} -static -s" CFLAGS="${CFLAGS} -s -static -O2 -I$PREFIX/include/beecrypt" CC="${TARGET_CC}" ../rpm-$RPMv/configure \
         --prefix=$PREFIX \
         --host=$TARGET \
         --without-cap \
         --without-lua \
         --with-beecrypt \
         --disable-nls \
-        --enable-static \
         --with-external-db \
         --without-selinux \
         --without-hackingdocs \
-        $BUILDTARGET
+        ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
     make install-strip
     if ((CREATE_PACKAGE)); then
@@ -1546,7 +1553,7 @@ empty_build() {
     download $EMPTY_LINK
     print_info "Compile ${pkgname} - ${pkgdesc}"
     cd empty-$EMPTYv
-    $TARGET_CC -static -s -Wall empty.c -lutil -o empty
+    ${TARGET_CC} -static -s -Wall empty.c -lutil -o empty
     strip_debug empty
     make PREFIX=$PREFIX install
     cd ..
@@ -1557,10 +1564,10 @@ e2tools_build() {
     download $E2TOOLS_LINK
     print_info "Compile ${pkgname} - ${pkgdesc}"
     mkdir e2tools-$E2TOOLSv-build && cd e2tools-$E2TOOLSv-build
-    LIBS="-pthread" LDFLAGS="${LDFLAGS} -Wl,-static -s" CFLAGS="${CFLAGS} -s -w -static -O2" CC="$TARGET_CC" ../e2tools-$E2TOOLSv/configure \
+    LIBS="-pthread" LDFLAGS="${LDFLAGS} -Wl,-static -s" CFLAGS="${CFLAGS} -s -w -static -O2" CC="${TARGET_CC}" ../e2tools-$E2TOOLSv/configure \
         --prefix=$PREFIX \
         --host=$TARGET \
-        $BUILDTARGET
+        ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
     strip_debug e2cp
     make install-strip
@@ -1580,7 +1587,7 @@ joe_build() {
     print_info "Compile ${pkgname} - ${pkgdesc}"
     # build
     cd ${pkgname}-${pkgver}
-    CC="$TARGET_CC" ./configure \
+    CC="${TARGET_CC}" ./configure \
         --prefix=$PREFIX \
         --target=$TARGET \
         --host=$TARGET \
@@ -1599,7 +1606,6 @@ joe_build() {
 
 
 gdb_build() {
-    apt-get install -y gcc g++
     local pkgname=gdb
     local pkgver=7.12
     local source=https://ftp.gnu.org/gnu/${pkgname}/${pkgname}-${pkgver}.tar.gz
@@ -1615,7 +1621,7 @@ gdb_build() {
         sed -i "s|RDYNAMIC=[\'\"]-Wl.*[\'\"]|RDYNAMIC=\"\"|g" $x;
     done
     # build
-    LDFLAGS="${LDFLAGS} -L${PREFIX}/lib" CFLAGS="${CFLAGS} -I${PREFIX}/include" CXXFLAGS=${CFLAGS} CC="$TARGET_CC" CXX="$TARGET_CXX" ../${pkgname}-${pkgver%%[!0-9.]*}*/configure \
+    LDFLAGS="${LDFLAGS} -L${PREFIX}/lib" CFLAGS="${CFLAGS} -I${PREFIX}/include" CXXFLAGS=${CFLAGS} CC="${TARGET_CC}" CXX="$TARGET_CXX" ../${pkgname}-${pkgver%%[!0-9.]*}*/configure \
         --host=${TARGET} \
         --target=${TARGET} \
         --with-system-zlib \
@@ -1633,7 +1639,6 @@ gdb_build() {
 
 
 distcc_build() {
-    apt install -y autoconf
     local pkgname=distcc
     local pkgver=3.3.3
     local pkgdesc='Distributed compilation service for C, C++ and Objective-C'
@@ -1652,7 +1657,7 @@ distcc_build() {
     # FS#66418, support Python 3.9
     find . -name "*.py" -type f -exec sed -i 's/time.clock()/time.perf_counter()/g' {} \;
     # build
-    CC="$TARGET_CC" ./configure \
+    CC="${TARGET_CC}" ./configure \
         --prefix=${PREFIX} \
         --target=${TARGET} \
         --host=${TARGET} \
@@ -1666,13 +1671,11 @@ distcc_build() {
     if ((MAKE_INSTALL)); then
         make INCLUDESERVER_PYTHON=/bin/python install-conf install-program
     fi
-    exit
     cd ..
 }
 
 
 yajl_build() {
-    apt install -y cmake
     local pkgname=yajl
     local pkgver=2.1.0
     local source="https://github.com/lloyd/${pkgname}/archive/${pkgver}.tar.gz"
@@ -1712,19 +1715,58 @@ package-query_build() {
     cd ${pkgname}-${pkgver}
     sed -ri 's|(-lalpm)|\1 $alpm_LIBS|g' ./configure
     cat ./configure|grep 'alpm $LIBS'
-    PKG_CONFIG="pkg-config --static" CC="$TARGET_CC" alpm_LIBS="$(pkg-config --static --libs libalpm)" ./configure \
+    PKG_CONFIG="pkg-config --static" CC="${TARGET_CC}" alpm_LIBS="$(pkg-config --static --libs libalpm)" ./configure \
         --prefix=${PREFIX} \
         --host=${TARGET} \
         --localstatedir="$(realpath_d ${PREFIX}/../var)" \
         --sysconfdir="$(realpath_d ${PREFIX}/../etc)" \
         --with-aur-url=https://aur.archlinux.org
     make ${PARALLEL_MAKE}
-    exit
+    # package
+    if ((CREATE_PACKAGE)); then
+        make DESTDIR="${pkgdir}" install
+    fi
+    if ((MAKE_INSTALL)); then
+        make install
+    fi
+    cd ..
+}
+
+
+yaourt_build() {
+    local pkgname=yaourt
+    local pkgver=1.9
+    local depends=('package-query')
+    local source="https://github.com/archlinuxfr/${pkgname}/archive/${pkgver}.tar.gz"
+    local pkgdir="/tmp/${pkgname}-${pkgver}"
+    wget -O ${pkgname}-${pkgver}.tar.gz ${source}
+    tar -xf ${pkgname}-${pkgver}.tar.gz
+    print_info "Compile ${pkgname} - ${pkgdesc}"
+    # build
+    cd ${pkgname}-${pkgver}/src
+    make PREFIX=${PREFIX} \
+        sysconfdir="$(realpath_d ${PREFIX}/../etc)" \
+        localstatedir="$(realpath_d ${PREFIX}/../var)" \
+        CC="${TARGET_CC}"
+    # package
+    if ((CREATE_PACKAGE)); then
+        make DESTDIR="${pkgdir}" PREFIX=${PREFIX} \
+            sysconfdir="$(realpath_d ${PREFIX}/../etc)" \
+            localstatedir="$(realpath_d ${PREFIX}/../var)" \
+            CC="${TARGET_CC}" install
+    fi
+    if ((MAKE_INSTALL)); then
+        make PREFIX=${PREFIX} \
+            sysconfdir="$(realpath_d ${PREFIX}/../etc)" \
+            localstatedir="$(realpath_d ${PREFIX}/../var)" \
+            CC="${TARGET_CC}" install
+    fi
+    cd ..
 }
 
 
 # Parse args
-options="ho:a:p:idvl"
+options="ho:a:p:idvlus"
 if (! getopts $options opt); then usage; fi
 
 while getopts $options opt; do
@@ -1733,34 +1775,40 @@ while getopts $options opt; do
     o   ) export TOOLS_BIN_DIR=$OPTARG ;;
     d   ) CREATE_PACKAGE=1 ;;
     v   ) VERBOSE=1 ;;
+    u   ) UPDATE=1 ;;
     a   ) case $OPTARG in
             armel   )
                 export TARGET=${TARGET:=arm-linux-gnueabi}
+                export CFLAGS_FOR_TARGET=${CFLAGS_FOR_TARGET:=""}
                 export SSL_ARCH=linux-armv4
                 export SSL_MARCH=${SSL_MARCH:=armv5}
                 ;;
             armbe   )
                 export TARGET=${TARGET:=armbe-linux-gnueabi}
-                export CFLAGS_FOR_TARGET="-mbig-endian"
+                export CFLAGS_FOR_TARGET=${CFLAGS_FOR_TARGET:="-mbig-endian"}
                 export SSL_ARCH=linux-armv4
                 export SSL_MARCH=${SSL_MARCH:=armv5}
                 ;;
             mipsel  )
                 export TARGET=${TARGET:=mipsel-linux-gnu}
+                export CFLAGS_FOR_TARGET=${CFLAGS_FOR_TARGET:=""}
                 export SSL_ARCH=linux-mips32
                 export SSL_MARCH=${SSL_MARCH:=mips1}
                 ;;
             mips    )
                 export TARGET=${TARGET:=mips-linux-gnu}
+                export CFLAGS_FOR_TARGET=${CFLAGS_FOR_TARGET:=""}
                 export SSL_ARCH=linux-mips32
                 export SSL_MARCH=${SSL_MARCH:=mips1}
                 ;;
             powerpc )
                 export TARGET=${TARGET:=powerpc-linux-gnu}
+                export CFLAGS_FOR_TARGET=${CFLAGS_FOR_TARGET:=""}
                 export SSL_ARCH=linux-ppc
                 ;;
-            i686     )
+            i686    )
                 export TARGET=${TARGET:=i686-linux-gnu}
+                export CFLAGS_FOR_TARGET=${CFLAGS_FOR_TARGET:=""}
                 export SSL_ARCH=linux-generic32
                 # export SSL_MARCH=i386
                 ;;
@@ -1775,6 +1823,7 @@ while getopts $options opt; do
         echo -e " $(echo ${packages[*]}|sed 's/ /\n /g')"
         exit 0
         ;;
+    s  ) ENABLE_STATIC=1 ;;
     h|* ) usage ;;
     esac
 done
@@ -1791,11 +1840,16 @@ done
 cd ..
 
 
+ubuntu_remove_unneeded() {
+    apt-get autoremove -y --purge md5deep fakeroot libfile-dircompare-perl gcc g++ >/dev/null
+    apt-get autoclean -y
+    apt-get clean -y
+}
+
 print_info "Remove unneeded files"
-apt-get autoremove -y --purge md5deep fakeroot libfile-dircompare-perl gcc g++ >/dev/null
-apt-get autoclean -y
-apt-get clean -y
+
 if [ -f /.dockerenv ]; then
     rm -rf /var/cache/* 2>/dev/null
     rm -rf ${LOGS_DIR} ${WORK_DIRECTORY} 2>/dev/null
 fi
+
