@@ -209,7 +209,7 @@ init() {
     export AR=${TARGET}-ar
     export AS=${TARGET}-as
     export RANLIB=${TARGET}-ranlib
-    export CFLAGS="${CFLAGS} -s -O2 "
+    export CFLAGS="${CFLAGS} -s -O2 -L${PREFIX}/lib -I${PREFIX}/include"
     export LDFLAGS="${LDFLAGS} -s "
 
     export USR=${TOOLCHAIN_DIR}
@@ -285,7 +285,7 @@ EOF
 
 # Versions
 
-export LIBPCAPv=1.8.1
+
 export FLEXv=2.6.4
 export E2FSv=1.43.4
 export LMAGICv=5.31
@@ -300,7 +300,7 @@ export E2TOOLSv=0.0.16
 export EMPTYv=0.6.20b
 # Links
 
-export PCAP_LINK=http://www.tcpdump.org/release/libpcap-$LIBPCAPv.tar.gz
+
 export FLEX_LINK=https://github.com/westes/flex/files/981163/flex-$FLEXv.tar.gz
 export E2FSPROGS_LINK=https://www.kernel.org/pub/linux/kernel/people/tytso/e2fsprogs/v$E2FSv/e2fsprogs-$E2FSv.tar.xz
 export LMAGIC_LINK=ftp://ftp.astron.com/pub/file/file-$LMAGICv.tar.gz
@@ -357,6 +357,7 @@ resolve_deps() {
             libgpg-error|curl ) lib_name="-l$(echo ${dep}|sed 's|lib||')" ;;
             gnupg             ) if [[ -e ${PREFIX}/bin/gpg ]]; then continue; fi ;;
             ca-certificates   ) ;;
+            linux-api-headers ) if [[ -e ${PREFIX}/include/linux/version.h ]]; then continue; fi ;;
             *                 ) lib_name="$(pkg-config --libs --static ${dep} 2>/dev/null)"; if [[ $? == 1 ]]; then lib_name="-l$(echo ${dep}|sed 's|lib||')"; fi ;;
         esac
         is_lib_installed "${lib_name}"
@@ -542,22 +543,31 @@ flex_build() {
 
 
 libpcap_build() {
-    if [[ ! -x flex ]]; then
-        flex_build $(echo $TARGET|tr "-" " "|awk '{print $1}')
-    fi
-    download $PCAP_LINK
+    local pkgname=libpcap
+    local pkgver=1.8.1
+    local pkgdesc="A system-independent interface for user-level packet capture"
+    local source="http://www.tcpdump.org/release/${pkgname}-${pkgver}.tar.gz"
+    # if [[ ! -x flex ]]; then
+    #     flex_build $(echo $TARGET|tr "-" " "|awk '{print $1}')
+    # fi
+    download ${source}
+    print_info "Resolve dependies for ${pkgname}"
+    resolve_deps ${depends[@]}
     print_info "Compile ${pkgname} - ${pkgdesc}"
-    mkdir libpcap-$LIBPCAPv-build && cd libpcap-$LIBPCAPv-build
-    LDFLAGS="${LDFLAGS} -static -s" CFLAGS="${CFLAGS} -static -O2 -s" CC="$TARGET_CC" ../libpcap-$LIBPCAPv/configure \
-        --prefix=$PREFIX \
-        --host=$TARGET \
+    # build
+    mkdir ${pkgname}-${pkgver}-build && cd ${pkgname}-${pkgver}-build
+    CC="${TARGET_CC}" ../${pkgname}-${pkgver}/configure \
+        --prefix=${PREFIX} \
+        --host=${TARGET} \
         --with-pcap=linux \
-        --disable-shared \
         ${CONFIGURE_ARGS[@]}
     make ${PARALLEL_MAKE}
-    make install
+    # package
     if ((CREATE_PACKAGE)); then
-        make DESTDIR=${DEB_PACK} install
+        make DESTDIR=${pkgdir} install
+    fi
+    if ((MAKE_INSTALL)); then
+        make install
     fi
     cd ..
 
@@ -1765,6 +1775,105 @@ yaourt_build() {
 }
 
 
+linux-api-headers_build() {
+    local pkgname=linux-api-headers
+    local pkgver=4.9
+    local pkgdesc='Kernel headers sanitized for use in userspace'
+    local source="https://www.kernel.org/pub/linux/kernel/v${pkgver:0:1}.x/linux-${pkgver}.tar.xz"
+    local pkgdir="/tmp/${pkgname}-${pkgver}"
+    download ${source}
+    print_info "Compile ${pkgname} - ${pkgdesc}"
+    # build
+    cd linux-${pkgver}
+    make ARCH=${KERNEL_ARCH} mrproper
+    make ARCH=${KERNEL_ARCH} headers_check
+    # prepare
+    if ((CREATE_PACKAGE)); then
+        make ARCH=${KERNEL_ARCH} INSTALL_HDR_PATH="${PREFIX}" headers_install
+    fi
+    if ((MAKE_INSTALL)); then
+        make ARCH=${KERNEL_ARCH} INSTALL_HDR_PATH="${pkgdir}" headers_install
+    fi
+    cd ..
+}
+
+
+libcap_build() {
+    local pkgname=libcap
+    local pkgver=2.33
+    local pkgdesc='POSIX 1003.1e capabilities'
+    local source="https://kernel.org/pub/linux/libs/security/linux-privs/libcap2/${pkgname}-${pkgver}.tar.xz"
+    local depends=('attr' 'linux-api-headers')
+    download ${source}
+    print_info "Resolve dependies for ${pkgname}"
+    resolve_deps ${depends[@]}
+    print_info "Compile ${pkgname} - ${pkgdesc}"
+    # prepare
+    cd ${pkgname}-${pkgver}
+    sed -i "/SBINDIR/s#sbin#bin#" Make.Rules
+    # use our buildflags
+    sed -i "s/CFLAGS :=/CFLAGS += \$(CPPFLAGS) /" Make.Rules
+    sed -i "s/LDFLAGS :=/LDFLAGS +=/" Make.Rules
+    sed -i 's|/usr/include/security/pam_modules.h|$(prefix)/include/security/pam_modules.h|' Make.Rules
+    # build
+    _makeargs=(
+        RAISE_SETFCAP=no
+        SBINDIR="${PREFIX}/bin"
+        lib=lib
+        prefix=${PREFIX}
+        CC="${TARGET_CC}"
+        BUILD_CC=gcc
+        AR=${AR}
+        RANLIB=${RANLIB}
+    )
+    make "${_makeargs[@]}"
+    # package
+    if ((CREATE_PACKAGE)); then
+        make DESTDIR=${pkgdir} "${_makeargs[@]}" install
+    fi
+    if ((MAKE_INSTALL)); then
+        make "${_makeargs[@]}" install
+    fi
+    cd ..
+
+    check_lib "libcap" "-lcap"
+}
+
+
+coreutils_build() {
+    local pkgname=coreutils
+    local pkgver=8.32
+    local pkgdesc='The basic file, shell and text manipulation utilities of the GNU operating system'
+    local source="https://ftp.gnu.org/gnu/${pkgname}/${pkgname}-${pkgver}.tar.xz"
+    local depends=('acl' 'attr' 'gmp' 'libcap' 'openssl')
+    download ${source}
+    print_info "Resolve dependies for ${pkgname}"
+    resolve_deps ${depends[@]}
+    print_info "Compile ${pkgname} - ${pkgdesc}"
+    # build
+    cd ${pkgname}-${pkgver}
+    CC="${TARGET_CC}" ./configure \
+        --prefix=${PREFIX} \
+        --target=${TARGET} \
+        --host=${TARGET} \
+        --libexecdir="${PREFIX}/lib" \
+        --with-openssl \
+        --enable-no-install-program=hostname,kill,uptime
+    make ${PARALLEL_MAKE}
+    for item in $(find ./src/ -type f -exec file {} +|grep ELF|tr -d ':'|awk '{print $1}'); do
+        strip_debug ${item}
+    done
+    # package
+    if ((CREATE_PACKAGE)); then
+        make DESTDIR=${pkgdir} install-strip
+    fi
+    if ((MAKE_INSTALL)); then
+        make install-strip
+    fi
+    cd ..
+}
+
+
 # Parse args
 options="ho:a:p:idvlus"
 if (! getopts $options opt); then usage; fi
@@ -1782,35 +1891,40 @@ while getopts $options opt; do
                 export CFLAGS_FOR_TARGET=${CFLAGS_FOR_TARGET:=""}
                 export SSL_ARCH=linux-armv4
                 export SSL_MARCH=${SSL_MARCH:=armv5}
+                export KERNEL_ARCH=arm
                 ;;
             armbe   )
                 export TARGET=${TARGET:=armbe-linux-gnueabi}
                 export CFLAGS_FOR_TARGET=${CFLAGS_FOR_TARGET:="-mbig-endian"}
                 export SSL_ARCH=linux-armv4
                 export SSL_MARCH=${SSL_MARCH:=armv5}
+                export KERNEL_ARCH=arm
                 ;;
             mipsel  )
                 export TARGET=${TARGET:=mipsel-linux-gnu}
                 export CFLAGS_FOR_TARGET=${CFLAGS_FOR_TARGET:=""}
                 export SSL_ARCH=linux-mips32
                 export SSL_MARCH=${SSL_MARCH:=mips1}
+                export KERNEL_ARCH=mips
                 ;;
             mips    )
                 export TARGET=${TARGET:=mips-linux-gnu}
                 export CFLAGS_FOR_TARGET=${CFLAGS_FOR_TARGET:=""}
                 export SSL_ARCH=linux-mips32
                 export SSL_MARCH=${SSL_MARCH:=mips1}
+                export KERNEL_ARCH=mips
                 ;;
             powerpc )
                 export TARGET=${TARGET:=powerpc-linux-gnu}
                 export CFLAGS_FOR_TARGET=${CFLAGS_FOR_TARGET:=""}
                 export SSL_ARCH=linux-ppc
+                export KERNEL_ARCH=powerpc
                 ;;
             i686    )
                 export TARGET=${TARGET:=i686-linux-gnu}
                 export CFLAGS_FOR_TARGET=${CFLAGS_FOR_TARGET:=""}
                 export SSL_ARCH=linux-generic32
-                # export SSL_MARCH=i386
+                export KERNEL_ARCH=x86
                 ;;
             *       ) usage ;;
         esac
