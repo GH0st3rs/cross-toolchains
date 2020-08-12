@@ -47,6 +47,10 @@ else
     NC="$(tput sgr 0 2>/dev/null || echo '\e[0m')" # Text Reset
 fi
 
+
+ISDEBUG=0
+
+
 if [ -f /.dockerenv ]; then
     ERROR_FILE=""
 else
@@ -55,26 +59,28 @@ fi
 LOG_FILE=$(pwd)/${BUILD_ARCH}-output.log
 RESULT_FILE=$(pwd)/${BUILD_ARCH}-result.log
 # Clear logs
-rm -rf $LOG_FILE $ERROR_FILE 2>/dev/null
+rm -rf ${LOG_FILE} ${ERROR_FILE} 2>/dev/null
 
 # Set script params
 trap 'previous_command=$this_command; this_command=$BASH_COMMAND' DEBUG
 
 redirect_output() {
+    ((ISDEBUG)) && return
     # Save stdout
     exec 3>&1
     # Set output log files
-    exec 1>>$LOG_FILE
+    exec 1>>${LOG_FILE}
     if [ -f /.dockerenv ]; then
         return
     else
         # Save stderr
         exec 4>&2
-        exec 2>>$ERROR_FILE
+        exec 2>>${ERROR_FILE}
     fi
 }
 
 restore_output() {
+    ((ISDEBUG)) && return
     # Restore original stdout
     exec 1>&3
     # Close the unused descriptors
@@ -90,15 +96,15 @@ restore_output() {
 
 download() {
     SRC_ARC=$(echo $1|grep -o '[a-zA-Z0-9\.\-]\+\.tar\.[a-z0-9]\+'|head -n1)
-    print_info "Start download $SRC_ARC"
-    if [[ ! -f $SRC_ARC ]]; then
+    print_info "Start download ${SRC_ARC}"
+    if [[ ! -f ${SRC_ARC} ]]; then
         wget -q $1
     fi
-    if [[ ! -f $SRC_ARC ]]; then
-        print_error "File $SRC_ARC not found! There may be installation problems"
+    if [[ ! -f ${SRC_ARC} ]]; then
+        print_error "File ${SRC_ARC} not found! There may be installation problems"
     else
         restore_output
-        echo -n "${GREEN}[+] Extracting: $SRC_ARC"; tar -xf $SRC_ARC; echo " => done${NC}"
+        echo -n "${GREEN}[+] Extracting: ${SRC_ARC}"; tar -xf ${SRC_ARC}; echo " => done${NC}"
         redirect_output
     fi
 }
@@ -138,36 +144,42 @@ if [[ ${BUILD_ARCH} == mipsel ]]; then
     export TARGET=${TARGET:=mipsel-linux-gnu}
     export KERNEL_ARCH=mips
     export CFLAGS_FOR_TARGET=${CFLAGS_FOR_TARGET:="-O2 -pipe -msoft-float"}
+    export CXXFLAGS_FOR_TARGET=${CXXFLAGS_FOR_TARGET:=$CFLAGS_FOR_TARGET}
     export GCC_PARAMS=${GCC_PARAMS:="--with-float=soft --enable-install-libiberty"}
     export GLIBC_EX_FLAGS=${GLIBC_EX_FLAGS:="--without-fp"}
 elif [[ ${BUILD_ARCH} == mips ]]; then
     export TARGET=${TARGET:=mips-linux-gnu}
     export KERNEL_ARCH=mips
     export CFLAGS_FOR_TARGET=${CFLAGS_FOR_TARGET:=""}
+    export CXXFLAGS_FOR_TARGET=${CXXFLAGS_FOR_TARGET:=$CFLAGS_FOR_TARGET}
     export GCC_PARAMS=${GCC_PARAMS:=""}
     export GLIBC_EX_FLAGS=${GLIBC_EX_FLAGS:=""}
 elif [[ ${BUILD_ARCH} == armel ]]; then
     export TARGET=${TARGET:=arm-linux-gnueabi}
     export KERNEL_ARCH=arm
     export CFLAGS_FOR_TARGET=${CFLAGS_FOR_TARGET:=""}
+    export CXXFLAGS_FOR_TARGET=${CXXFLAGS_FOR_TARGET:=$CFLAGS_FOR_TARGET}
     export GCC_PARAMS=${GCC_PARAMS:=""}
     export GLIBC_EX_FLAGS=${GLIBC_EX_FLAGS:=""}
 elif [[ ${BUILD_ARCH} == armbe ]]; then
     export TARGET=${TARGET:=armbe-linux-gnueabi}
     export KERNEL_ARCH=arm
     export CFLAGS_FOR_TARGET=${CFLAGS_FOR_TARGET:="-mbig-endian"}
+    export CXXFLAGS_FOR_TARGET=${CXXFLAGS_FOR_TARGET:=$CFLAGS_FOR_TARGET}
     export GCC_PARAMS=${GCC_PARAMS:="--with-endian=big"}
     export GLIBC_EX_FLAGS=${GLIBC_EX_FLAGS:=""}
 elif [[ ${BUILD_ARCH} == i686 ]]; then
     export TARGET=${TARGET:=i686-linux-gnu}
     export KERNEL_ARCH=x86
     export CFLAGS_FOR_TARGET=${CFLAGS_FOR_TARGET:=""}
+    export CXXFLAGS_FOR_TARGET=${CXXFLAGS_FOR_TARGET:=$CFLAGS_FOR_TARGET}
     export GCC_PARAMS=${GCC_PARAMS:=""}
     export GLIBC_EX_FLAGS=${GLIBC_EX_FLAGS:=""}
 elif [[ ${BUILD_ARCH} == powerpc ]]; then
     export TARGET=${TARGET:=powerpc-linux-gnu}
     export KERNEL_ARCH=powerpc
     export CFLAGS_FOR_TARGET=${CFLAGS_FOR_TARGET:=""}
+    export CXXFLAGS_FOR_TARGET=${CXXFLAGS_FOR_TARGET:=$CFLAGS_FOR_TARGET}
     export GCC_PARAMS=${GCC_PARAMS:=""}
     export GLIBC_EX_FLAGS=${GLIBC_EX_FLAGS:=""}
 else
